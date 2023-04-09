@@ -128,6 +128,7 @@ if_statement:
 
 while_statement:
     WHILE LPAREN condition RPAREN LBRACE statement_list RBRACE // While loop with a code block
+    | WHILE LPAREN condition RPAREN statement
     ;
 
 function_call:
