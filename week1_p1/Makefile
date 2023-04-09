@@ -7,7 +7,7 @@
 
 # Variables
 SRC = miniC
-TEST_PROG = testing_mini.c
+TEST_PROG = testing.sh
 
 # Targets
 all: $(SRC).out
@@ -17,10 +17,11 @@ $(SRC).out: $(SRC).l $(SRC).y
 	lex $(SRC).l
 	gcc -o $(SRC).out lex.yy.c y.tab.c
 
-test: $(SRC).out
-	./$(SRC).out $(TEST_PROG)
+test: $(TEST_PROG) $(SRC).out
+	chmod a+x $(TEST_PROG)
+	bash -v ./$(TEST_PROG)
 
 clean:
-	rm -f *~ *.o lex.yy.c y.tab.c y.tab.h $(SRC).out y.output
+	rm -f *~ *.o *.out lex.yy.c y.tab.c y.tab.h y.output
 
 .PHONY: all test clean

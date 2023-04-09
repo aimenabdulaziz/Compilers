@@ -171,5 +171,5 @@ int main(int argc, char* argv[]) {
 }
 
 void yyerror(const char *s) {
-    fprintf(stderr, "\nSyntax error (line: %d). Last token: %s\n", yylineno, yytext);
+    printf("\nSyntax error (line: %d). Last token: %s\n", yylineno, yytext);
 }
