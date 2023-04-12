@@ -128,7 +128,7 @@ if_statement:
     ;
 
 while_loop:
-    WHILE LPAREN condition RPAREN block_stmt // While loop with a code block
+    WHILE LPAREN condition RPAREN statement // While loop with a code block
     ;
 
 function_call:
