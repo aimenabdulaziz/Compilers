@@ -5,7 +5,7 @@ int func(int i){
 	int a;
 	int b;
 	
-  if (a < i){
+  	if (a < i){
 		while (b < i){
 			b = b + 20;
 		}

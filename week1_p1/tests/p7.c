@@ -7,5 +7,6 @@ int func (int i) {
     int result;
 
     a = i * 10;
-    b = i * (2 * 10a);
+    b = i * 2a;
 }
+// Has a syntax error (b = i * 2a;)

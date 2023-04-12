@@ -23,6 +23,8 @@
 "else"                  { printf("%s", yytext); return ELSE; }
 "while"                 { printf("%s", yytext); return WHILE; }
 "void"                  { printf("%s", yytext); return VOID; }
+"print"                 { printf("%s", yytext); return PRINT; }
+"read"                  { printf("%s", yytext); return READ; }
 "+"                     { printf("%s", yytext); return PLUS; }
 "-"                     { printf("%s", yytext); return MINUS; }
 "*"                     { printf("%s", yytext); return MULTIPLY; }

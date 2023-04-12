@@ -13,4 +13,5 @@ dir=tests
 # Loop through each file and run it with miniC.out
 for i in {1..7}; do
     ./miniC.out "$dir/p$i.c"
+    echo "----------------------------------------"
 done
