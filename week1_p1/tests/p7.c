@@ -7,6 +7,6 @@ int func (int i) {
     int result;
 
     a = i * 10;
-    b = i * 2a;
+    b = i * 2;
 }
-// Has a syntax error (b = i * 2a;)
+// This should result in a syntax error (miniC doesn't allow comments)

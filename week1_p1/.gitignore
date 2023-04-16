@@ -1,5 +1,5 @@
 *.out
 *.output
 lex.yy.c 
-y.tab.c 
-y.tab.h 
+y.tab.*
+temp.y

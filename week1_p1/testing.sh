@@ -1,7 +1,7 @@
 # MiniC Compiler testing script
 #
 # Author: Aimen Abdulaziz
-# Date: April 9, 2023
+# Date: Spring, 2023
 #
 # usage: ./testing.sh or make test (strongly recommended)
 #

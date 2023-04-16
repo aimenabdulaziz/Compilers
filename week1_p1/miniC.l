@@ -1,7 +1,7 @@
 /*
  * MiniC Compiler Lex File
  * Author: Aimen Abdulaziz
- * Date: April 9, 2023
+ * Date: Spring, 2023
  *
  * This file contains the lexical analyzer rules for the MiniC compiler.
  * It works in conjunction with the Yacc file, which contains
@@ -9,6 +9,7 @@
  */
 
 %{
+#include "ast.h"
 #include "y.tab.h"
 %}
 
@@ -23,8 +24,8 @@
 "else"                  { printf("%s", yytext); return ELSE; }
 "while"                 { printf("%s", yytext); return WHILE; }
 "void"                  { printf("%s", yytext); return VOID; }
-"print"                 { printf("%s", yytext); return PRINT; }
-"read"                  { printf("%s", yytext); return READ; }
+"print"                 { printf("%s", yytext); yylval.sname = strdup(yytext); return PRINT; }
+"read"                  { printf("%s", yytext); yylval.sname = strdup(yytext); return READ; }
 "+"                     { printf("%s", yytext); return PLUS; }
 "-"                     { printf("%s", yytext); return MINUS; }
 "*"                     { printf("%s", yytext); return MULTIPLY; }
@@ -42,7 +43,7 @@
 ","                     { printf("%s", yytext); return COMMA; }
 "="                     { printf("%s", yytext); return ASSIGN; }
 [0-9]+                  { printf("%s", yytext); yylval.number = atoi(yytext); return NUMBER; }
-[a-zA-Z_][a-zA-Z_0-9]*  { printf("%s", yytext); yylval.string = strdup(yytext); return IDENTIFIER; }
+[a-zA-Z_][a-zA-Z_0-9]*  { printf("%s", yytext); yylval.sname = strdup(yytext); return IDENTIFIER; }
 [ \t\n]+                { printf("%s", yytext); /* ignore whitespace */ }
 .                       { printf("%s", yytext); return yytext[0]; }
 

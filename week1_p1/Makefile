@@ -12,10 +12,10 @@ TEST_PROG = testing.sh
 # Targets
 all: $(SRC).out
 
-$(SRC).out: $(SRC).l $(SRC).y
+$(SRC).out: $(SRC).l $(SRC).y ast.c
 	yacc -d -v $(SRC).y
 	lex $(SRC).l
-	gcc -o $(SRC).out lex.yy.c y.tab.c
+	g++ -o $(SRC).out lex.yy.c y.tab.c ast.c
 
 test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)

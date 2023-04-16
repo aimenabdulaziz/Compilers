@@ -1,7 +1,7 @@
 /*
  * MiniC Compiler Yacc File
  * Author: Aimen Abdulaziz
- * Date: April 9, 2023
+ * Date: Spring, 2023
  *
  * This file contains the grammar rules and actions for parsing a
  * subset of the C programming language called MiniC. The grammar
@@ -10,47 +10,58 @@
  */
  
 %{
+#include "ast.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-void yyerror(const char *s);
-int yylex();
+#include <vector> // C++ vector
+extern void yyerror(const char *s);
+extern int yylex();
 extern FILE *yyin;
 extern int yylex_destroy();
 extern int yylineno;
 extern char *yytext;
+astNode *root;
 %}
 
 %union {
     int number;
-    char *string;
+    char *sname;
+    astNode *node;
+    std::vector<astNode*> *node_list;
 }
 
-%token <string> IDENTIFIER
+%token <sname> IDENTIFIER PRINT READ 
 %token <number> NUMBER
-%token EXTERN PRINT VOID INT RETURN IF ELSE WHILE READ
+%token RETURN IF ELSE WHILE EXTERN VOID INT
 %token PLUS MINUS MULTIPLY DIVIDE GT LT EQ GE LE
 %token LPAREN RPAREN LBRACE RBRACE SEMICOLON COMMA ASSIGN
+
+%type <node> program extern_print extern_read parameter function_definition function_header
+%type <node> block_stmt variable_declaration statement assignment_statement
+%type <node> return_statement expression term if_statement while_loop function_call condition
+%type <node_list> statement_list variable_declarations
+
 %nonassoc IFX
 %nonassoc ELSE
 %nonassoc UNARY
 
 %%
 
+/* Assumes there are always two external declarations */
 program:
-    extern_declaration function_definition // Top-level grammar rule
-    ;
-
-extern_declaration:
-    extern_print extern_read // Assumes there are always two external declarations
+    extern_print extern_read function_definition { 
+        $$ = createProg($1, $2, $3);
+        root = $$;
+    }
     ;
 
 extern_print:
-    EXTERN VOID PRINT LPAREN extern_parameter RPAREN SEMICOLON // Extern print function declaration
+    EXTERN VOID PRINT LPAREN extern_parameter RPAREN SEMICOLON { $$ = createExtern($3); }
     ;
 
 extern_read:
-    EXTERN INT READ LPAREN RPAREN SEMICOLON // Extern read function declaration
+    EXTERN INT READ LPAREN RPAREN SEMICOLON { $$ = createExtern($3); }
     ;
 
 extern_parameter:
@@ -58,90 +69,121 @@ extern_parameter:
     | INT // Extern function declaration with only parameter type but no name
     ;
 
-parameter: // Function parameter
-    INT IDENTIFIER // One parameter
-    | // No parameter
+/* Function paramter - at most one parameter */
+parameter: 
+    INT IDENTIFIER  { $$ = createVar($2); }
+    | { $$ = createVar(NULL); }
     ;
 
+/* Function definition
+ * Assumes there is always one function definition
+ * The function always takes one parameter
+ */
 function_definition:
-    function_header block_stmt // Function definition with at most single integer parameter
+    function_header block_stmt { 
+        $1->func.body = $2;
+        $$ = $1; 
+    }
     ;
 
 function_header:
-    INT IDENTIFIER LPAREN parameter RPAREN
+    INT IDENTIFIER LPAREN parameter RPAREN { 
+        $$ = createFunc($2, $4, NULL); 
+    }
     ;
 
 block_stmt:
-    LBRACE variable_declarations statement_list RBRACE // Code block with variable declarations at the top
+    // Code block with variable declarations at the top
+    LBRACE variable_declarations statement_list RBRACE { 
+        // add the declarations list to the statement_list and pass it to createBlock
+        $3->insert($3->begin(), $2->begin(), $2->end());
+        $$ = createBlock($3); 
+    }
     ;
 
 variable_declarations:
-    variable_declaration variable_declarations // One or more variable declarations
-    | // No variable declarations
+    // One or more variable declarations
+    variable_declaration variable_declarations {
+        // Prepend the current declaration to the list and pass it up the tree
+        $2->push_back($1);
+        $$ = $2;
+    }
+    // No variable declarations - empty vector
+    | { $$ = new std::vector<astNode*>(); }
     ;
 
+// Declare variables of integer type
 variable_declaration:
-    INT IDENTIFIER SEMICOLON  // Declare variables of integer type
+    INT IDENTIFIER SEMICOLON { $$ = createDecl($2);}
     ;
 
 statement_list:
-    statement statement_list 
-    | statement
+    statement statement_list {
+        // Prepend the current statement to the list and pass it up the tree
+        $2->push_back($1);
+        $$ = $2;
+    }
+    | statement { 
+        // Create a new vector and add the current statement to it
+        $$ = new std::vector<astNode*>(); 
+        $$->push_back($1); 
+        }
     ;
 
 statement: 
-    assignment_statement SEMICOLON
-    | return_statement SEMICOLON
-    | function_call SEMICOLON
-    | if_statement
-    | while_loop
-    | block_stmt
+    assignment_statement SEMICOLON { $$ = $1; }
+    | return_statement SEMICOLON { $$ = $1; }
+    | function_call SEMICOLON { $$ = $1; }
+    | if_statement { $$ = $1; }
+    | while_loop { $$ = $1; }
+    | block_stmt { $$ = $1; }
     ;
 
 assignment_statement:
-    IDENTIFIER ASSIGN expression // Assign a value to a variable
+    IDENTIFIER ASSIGN expression { 
+        astNode *identifier_node = createVar($1);
+        $$ = createAsgn(identifier_node, $3);
+    }
     ;
 
 return_statement:
-    RETURN expression // Return a value from a function
+    RETURN expression { $$ = createRet($2); } 
     ;
 
 expression:
-    term PLUS term // Addition
-    | term MINUS term // Subtraction
-    | term MULTIPLY term // Multiplication
-    | term DIVIDE term // Division
-    | term // No operation
-    | function_call // Function call
+    term PLUS term { $$ = createBExpr($1, $3, add); }
+    | term MINUS term { $$ = createBExpr($1, $3, sub); }
+    | term MULTIPLY term { $$ = createBExpr($1, $3, mul); }
+    | term DIVIDE term { $$ = createBExpr($1, $3, divide); }
+    | term { $$ = $1; } 
+    | function_call { $$ = $1; }
     ;
 
 term:
-    IDENTIFIER // Variable
-    | NUMBER // Constant number
-    | MINUS term %prec UNARY // Handle negative numbers
-    | LPAREN term RPAREN // Parenthesized term
-    ;
+    IDENTIFIER { $$ = createVar($1); } 
+    | NUMBER  { $$ = createCnst($1); } 
+    | MINUS term %prec UNARY  { $$ = createUExpr($2, uminus); }
 
 if_statement:
-    IF LPAREN condition RPAREN statement %prec IFX 
-    | IF LPAREN condition RPAREN statement ELSE statement
+    IF LPAREN condition RPAREN statement %prec IFX { $$ = createIf($3, $5); }
+    | IF LPAREN condition RPAREN statement ELSE statement { $$ = createIf($3, $5, $7); }
     ;
 
 while_loop:
-    WHILE LPAREN condition RPAREN statement // While loop with a code block
+    WHILE LPAREN condition RPAREN statement { $$ = createWhile($3, $5); }
     ;
 
 function_call:
-    PRINT LPAREN term RPAREN // Function call with an optional argument
-    | READ LPAREN RPAREN
+    PRINT LPAREN term RPAREN { $$ = createCall($1, $3); }
+    | READ LPAREN RPAREN { $$ = createCall($1); }
     ;
 
 condition:
-    term GT term // Greater than
-    | term LT term // Less than
-    | term EQ term // Equal to
-    | term GE term // Greater than or equal to
-    | term LE term // Less than or equal to
+    term GT term { $$ = createRExpr($1, $3, gt); }
+    | term LT term { $$ = createRExpr($1, $3, lt); }
+    | term EQ term { $$ = createRExpr($1, $3, eq); }
+    | term GE term { $$ = createRExpr($1, $3, ge); }
+    | term LE term { $$ = createRExpr($1, $3, le); }
     ;
 
 %%
@@ -156,6 +198,8 @@ int main(int argc, char* argv[]) {
     }
 
     yyparse();
+
+    printNode(root);
 
     if (yyin != stdin) {
         fclose(yyin);
