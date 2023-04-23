@@ -3,6 +3,10 @@
 #include<stdlib.h>
 #include<assert.h>
 #include<string.h>
+#include <vector>
+#include <set>
+#include <string>
+using namespace std;
 
 /* local helper functions */
 char * get_indent_str(int n){
@@ -576,4 +580,179 @@ void printStmt(astStmt *stmt, int n){
 				 }
 	}
 	free(indent);
+}
+
+static void traverse(astNode *node, vector<set<string>> *symbol_tables);
+static void traverseStmt(astStmt *stmt, vector<set<string>> *symbol_tables);
+
+/*
+ * Helper function to print the symbol tables for debugging purposes
+ */
+void printSymbolTables(const vector<set<string>>& symbol_tables) {
+    int index = 0;
+    for (const auto& table : symbol_tables) {
+        printf("Index %d:\n", index);
+        for (const auto& symbol : table) {
+            printf("  %s\n", symbol.c_str());
+        }
+        index++;
+    }
+}
+
+
+void semanticAnalysis(astNode *node) {
+    if (!node) {
+		return;
+	}
+
+    // Declare an empty stack of symbol tables
+    vector<set<string>> symbol_tables;
+	
+	// Traverse the AST and populate the symbol tables
+	traverse(node, &symbol_tables);
+    
+}
+
+static void traverse(astNode *node, vector<set<string>> *symbol_tables) {
+	switch (node->type) {
+		case ast_prog: {
+            traverse(node->prog.ext1, symbol_tables); 
+			traverse(node->prog.ext2, symbol_tables);
+			traverse(node->prog.func, symbol_tables);
+			break;
+		}
+
+		case ast_extern: {
+			// ignore extern nodes
+			break;
+		}
+		
+		case ast_func: {
+			// create a new symbol table curr_sym_table and push it to symbol table stack
+			set<string> curr_sym_table;
+			symbol_tables->push_back(curr_sym_table);
+
+			// if func node has a parameter add parameter to curr_sym_table
+			if (node->func.param) {
+				symbol_tables->back().insert(node->func.param->var.name);
+			}
+
+			// traverse the body of the function
+			traverse(node->func.body, symbol_tables);
+
+			// pop the symbol table from the stack
+			symbol_tables->pop_back();
+
+			break;
+		}
+
+		case ast_stmt: {
+			traverseStmt(&node->stmt, symbol_tables);
+			break;
+		}
+
+		case ast_var: {
+			// check if the variable appears in one of the symbol tables on the stack
+			bool found = false;
+			for (auto &table : *symbol_tables) {
+				if (table.contains(node->var.name)) {
+					// variable found in symbol table
+					found = true;
+					break;
+				}
+			}
+
+			if (!found) {
+				// variable not found in symbol table
+				printf("Error: undeclared variable %s\n", node->var.name);
+				// exit(1); do we need to exit here?	
+			}
+
+			break;
+		}
+
+		case ast_cnst: {
+			// ignore the values of constant nodes
+			break;
+		}
+
+		case ast_rexpr: {
+			traverse(node->rexpr.lhs, symbol_tables);
+			traverse(node->rexpr.rhs, symbol_tables);
+			break;
+		}
+
+		case ast_bexpr: {
+			traverse(node->bexpr.lhs, symbol_tables);
+			traverse(node->bexpr.rhs, symbol_tables);
+			break;
+		}
+
+		case ast_uexpr: {
+			traverse(node->uexpr.expr, symbol_tables);
+			break;
+		}
+	}
+}
+
+static void traverseStmt(astStmt *stmt, vector<set<string>> *symbol_tables) {
+	if (!stmt) {
+		return;
+	}
+
+	switch (stmt->type) {
+		case ast_call: {
+			if (stmt->call.param) {
+				traverse(stmt->call.param, symbol_tables);
+			}
+			break;
+		}
+		
+		case ast_ret: {
+			traverse(stmt->ret.expr, symbol_tables);
+			break;
+		}
+
+		case ast_block: {
+			// create a new symbol table curr_sym_table and push it to symbol table stack
+			set<string> curr_sym_table;
+			symbol_tables->push_back(curr_sym_table);
+
+			// visit all nodes in the statement list of block statement 
+			for (auto &node : *stmt->block.stmt_list) {
+				traverse(node, symbol_tables);
+			}
+
+			// pop the symbol table from the stack
+			symbol_tables->pop_back();
+
+			break;
+		}
+
+		case ast_while: {
+			traverse(stmt->whilen.cond, symbol_tables);
+			traverseStmt(&stmt->whilen.body->stmt, symbol_tables);
+			break;
+		}
+
+		case ast_if: {
+			traverse(stmt->ifn.cond, symbol_tables);
+			traverseStmt(&stmt->ifn.if_body->stmt, symbol_tables);
+			if (stmt->ifn.else_body) {
+				traverseStmt(&stmt->ifn.else_body->stmt, symbol_tables);
+			}
+			break;
+		}
+
+		case ast_asgn: {
+			traverse(stmt->asgn.lhs, symbol_tables);
+			traverse(stmt->asgn.rhs, symbol_tables);
+			break;
+		}
+
+		case ast_decl: {
+			symbol_tables->back().insert(stmt->decl.name);
+			break;
+		}
+	}
 }

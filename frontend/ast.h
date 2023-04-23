@@ -154,7 +154,7 @@ struct ast_Node{
 		  astConst  cnst;
 		  astRExpr  rexpr;
 		  astBExpr  bexpr;
-      astUExpr  uexpr;
+      	  astUExpr  uexpr;
 		};
 	};
 
@@ -221,5 +221,7 @@ void freeStmt(astNode*);
 
 void printNode(astNode*, int indent=0);
 void printStmt(astStmt*, int indent=0);
+
+void semanticAnalysis(astNode *node);
 
 #endif

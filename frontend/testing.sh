@@ -12,6 +12,16 @@ dir=tests
 
 # Loop through each file and run it with miniC.out
 for i in {1..7}; do
-    ./miniC.out "$dir/p$i.c"
+    echo "Running lex_yacc_$dir/p$i.c"
+    echo
+    ./miniC.out "lex_yacc_$dir/p$i.c"
+    echo "----------------------------------------"
+done
+
+# Loop through each file and run it with miniC.out
+for i in {1..4}; do
+    echo "Running semantic_$dir/p$i.c"
+    echo
+    ./miniC.out "semantic_$dir/p$i.c"
     echo "----------------------------------------"
 done

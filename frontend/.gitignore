@@ -2,4 +2,4 @@
 *.output
 lex.yy.c 
 y.tab.*
-temp.y
+temp.cpp

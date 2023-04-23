@@ -8,6 +8,8 @@
 # Variables
 SRC = miniC
 TEST_PROG = testing.sh
+CXX=g++
+CXXFLAGS=-std=c++20 -Wextra -Wpedantic
 
 # Targets
 all: $(SRC).out
@@ -15,7 +17,7 @@ all: $(SRC).out
 $(SRC).out: $(SRC).l $(SRC).y ast.c
 	yacc -d -v $(SRC).y
 	lex $(SRC).l
-	g++ -o $(SRC).out lex.yy.c y.tab.c ast.c
+	$(CXX) $(CXXFLAGS) -g -o $(SRC).out lex.yy.c y.tab.c ast.c
 
 test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)

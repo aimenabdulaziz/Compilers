@@ -15,13 +15,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector> // C++ vector
-extern void yyerror(const char *s);
+#include <stack> // C++ stack
+#include <set>
+
+astNode *root; // root of the AST
+extern void yyerror(const char *);
 extern int yylex();
 extern FILE *yyin;
 extern int yylex_destroy();
 extern int yylineno;
 extern char *yytext;
-astNode *root;
 %}
 
 %union {
@@ -72,12 +75,12 @@ extern_parameter:
 /* Function paramter - at most one parameter */
 parameter: 
     INT IDENTIFIER  { $$ = createVar($2); }
-    | { $$ = createVar(NULL); }
+    | { $$ = NULL; }
     ;
 
 /* Function definition
  * Assumes there is always one function definition
- * The function always takes one parameter
+ * The function always takes at most one parameter
  */
 function_definition:
     function_header block_stmt { 
@@ -103,10 +106,10 @@ block_stmt:
 
 variable_declarations:
     // One or more variable declarations
-    variable_declaration variable_declarations {
+    variable_declarations variable_declaration {
         // Prepend the current declaration to the list and pass it up the tree
-        $2->push_back($1);
-        $$ = $2;
+        $1->push_back($2);
+        $$ = $1;
     }
     // No variable declarations - empty vector
     | { $$ = new std::vector<astNode*>(); }
@@ -118,10 +121,10 @@ variable_declaration:
     ;
 
 statement_list:
-    statement statement_list {
+    statement_list statement {
         // Prepend the current statement to the list and pass it up the tree
-        $2->push_back($1);
-        $$ = $2;
+        $1->push_back($2);
+        $$ = $1;
     }
     | statement { 
         // Create a new vector and add the current statement to it
@@ -175,7 +178,7 @@ while_loop:
 
 function_call:
     PRINT LPAREN term RPAREN { $$ = createCall($1, $3); }
-    | READ LPAREN RPAREN { $$ = createCall($1); }
+    | READ LPAREN RPAREN { $$ = createCall($1, NULL); }
     ;
 
 condition:
@@ -197,19 +200,26 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Parse the input
     yyparse();
 
+    // Print the AST
     printNode(root);
+
+    // Perform semantic analysis on the root node
+    semanticAnalysis(root);
 
     if (yyin != stdin) {
         fclose(yyin);
     }
 
     yylex_destroy();
+
+    freeNode(root);
     
     return 0;
 }
 
-void yyerror(const char *s) {
+void yyerror(const char *) {
     printf("\nSyntax error (line: %d). Last token: %s\n", yylineno, yytext);
 }
