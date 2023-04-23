@@ -1,6 +1,6 @@
-# Lexical Analyzer and Parser
+# Lexical Analyzer, Parser, and Sentiment Analysis for MiniC
 
-This directory contains the Lex and Yacc files for building a compiler for the MiniC language, a simplified subset of the C programming language. 
+This directory contains the Lex, Yacc, and Sentiment Analysis files for building a compiler for the MiniC language, a simplified subset of the C programming language. 
 
 ## Usage
 
