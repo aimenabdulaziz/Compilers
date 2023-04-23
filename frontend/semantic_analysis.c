@@ -53,12 +53,11 @@ void semanticAnalysis(astNode *node) {
     vector<set<string>> symbolTables;
 	
 	// Traverse the AST and populate the symbol tables
-	int errorFound = traverse(node, &symbolTables);
+	bool errorFound = traverse(node, &symbolTables);
 
     if (errorFound) {
 		printf("Result: Semantic analysis unsuccessful.\n");
-    } 
-	else {
+    } else {
         printf("Result: Semantic analysis successful.\n");
     }
 }
@@ -83,7 +82,7 @@ static bool traverse(astNode *node, vector<set<string>> *symbolTables) {
 
 	switch (node->type) {
 		case ast_prog: {
-            errorFound = traverse(node->prog.ext1, symbolTables) || errorFound; 
+			errorFound = traverse(node->prog.ext1, symbolTables) || errorFound; 
 			errorFound = traverse(node->prog.ext2, symbolTables) || errorFound; 
 			errorFound = traverse(node->prog.func, symbolTables) || errorFound; 
 			break;
