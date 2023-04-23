@@ -60,11 +60,11 @@ program:
     ;
 
 extern_print:
-    EXTERN VOID PRINT LPAREN extern_parameter RPAREN SEMICOLON { $$ = createExtern($3); }
+    EXTERN VOID PRINT LPAREN extern_parameter RPAREN SEMICOLON { $$ = createExtern($3); free($3); }
     ;
 
 extern_read:
-    EXTERN INT READ LPAREN RPAREN SEMICOLON { $$ = createExtern($3); }
+    EXTERN INT READ LPAREN RPAREN SEMICOLON { $$ = createExtern($3); free($3); }
     ;
 
 extern_parameter:
@@ -74,7 +74,7 @@ extern_parameter:
 
 /* Function paramter - at most one parameter */
 parameter: 
-    INT IDENTIFIER  { $$ = createVar($2); }
+    INT IDENTIFIER  { $$ = createVar($2); free($2); }
     | { $$ = NULL; }
     ;
 
@@ -92,6 +92,7 @@ function_definition:
 function_header:
     INT IDENTIFIER LPAREN parameter RPAREN { 
         $$ = createFunc($2, $4, NULL); 
+        free($2);
     }
     ;
 
@@ -101,6 +102,7 @@ block_stmt:
         // add the declarations list to the statement_list and pass it to createBlock
         $3->insert($3->begin(), $2->begin(), $2->end());
         $$ = createBlock($3); 
+        delete $2;
     }
     ;
 
@@ -117,7 +119,7 @@ variable_declarations:
 
 // Declare variables of integer type
 variable_declaration:
-    INT IDENTIFIER SEMICOLON { $$ = createDecl($2);}
+    INT IDENTIFIER SEMICOLON { $$ = createDecl($2); free($2); }
     ;
 
 statement_list:
@@ -146,6 +148,7 @@ assignment_statement:
     IDENTIFIER ASSIGN expression { 
         astNode *identifier_node = createVar($1);
         $$ = createAsgn(identifier_node, $3);
+        free($1);
     }
     ;
 
@@ -163,7 +166,7 @@ expression:
     ;
 
 term:
-    IDENTIFIER { $$ = createVar($1); } 
+    IDENTIFIER { $$ = createVar($1); free($1); } 
     | NUMBER  { $$ = createCnst($1); } 
     | MINUS term %prec UNARY  { $$ = createUExpr($2, uminus); }
 
@@ -177,8 +180,11 @@ while_loop:
     ;
 
 function_call:
-    PRINT LPAREN term RPAREN { $$ = createCall($1, $3); }
-    | READ LPAREN RPAREN { $$ = createCall($1, NULL); }
+    PRINT LPAREN term RPAREN { 
+        $$ = createCall($1, $3); 
+        free($1);
+    }
+    | READ LPAREN RPAREN { $$ = createCall($1, NULL); free($1); }
     ;
 
 condition:
@@ -214,9 +220,9 @@ int main(int argc, char* argv[]) {
     }
 
     yylex_destroy();
-
-    freeNode(root);
     
+    freeNode(root);
+
     return 0;
 }
 

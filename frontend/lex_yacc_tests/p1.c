@@ -1,4 +1,4 @@
-extern void print(int n);
+extern void print(int);
 extern int read();
 
 int func(int i){

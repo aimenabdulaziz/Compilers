@@ -23,7 +23,10 @@ test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)
 	bash -v ./$(TEST_PROG)
 
+valgrind: $(SRC).out
+	valgrind --leak-check=full --show-leak-kinds=all ./$(SRC).out lex_yacc_tests/p1.c
+
 clean:
 	rm -f *~ *.o *.out lex.yy.c y.tab.c y.tab.h y.output
 
-.PHONY: all test clean
+.PHONY: all test valgrind clean 

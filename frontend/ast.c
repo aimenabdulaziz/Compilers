@@ -35,7 +35,6 @@ void freeProg(astNode *node){
 	freeExtern(node->prog.ext1);
 	freeExtern(node->prog.ext2);
 	freeFunc(node->prog.func);
-	
 	free(node);
 	return;
 }
