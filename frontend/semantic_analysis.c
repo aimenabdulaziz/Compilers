@@ -17,8 +17,8 @@
 using namespace std;
 
 /********************** local function prototypes ********************* */
-static void traverse(astNode *node, vector<set<string>> *symbolTables);
-static void traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables);
+static bool traverse(astNode *node, vector<set<string>> *symbolTables);
+static bool traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables);
 
 /*
  * Helper function to print the symbol tables for debugging purposes
@@ -38,11 +38,14 @@ void printSymbolTables(const vector<set<string>>& symbolTables) {
 
 /**************** semanticAnalysis() ****************/
 /* It traverses the AST and checks for undeclared variables and 
- * populates symbol tables accordingly.
- * see minic_semantic_analysis.h for more description 
+ * populates symbol tables accordingly. User will only call this 
+ * function, and all necessary helper functions will invoked in 
+ * this function.
+ * 
  */
 void semanticAnalysis(astNode *node) {
     if (!node) {
+		printf("Error: AST is empty\n");
 		return;
 	}
 
@@ -50,7 +53,14 @@ void semanticAnalysis(astNode *node) {
     vector<set<string>> symbolTables;
 	
 	// Traverse the AST and populate the symbol tables
-	traverse(node, &symbolTables);
+	int errorFound = traverse(node, &symbolTables);
+
+    if (errorFound) {
+		printf("Result: Semantic analysis unsuccessful.\n");
+    } 
+	else {
+        printf("Result: Semantic analysis successful.\n");
+    }
 }
 
 /**************** traverse() ****************/
@@ -61,13 +71,21 @@ void semanticAnalysis(astNode *node) {
  *
  * node:          The current AST node being traversed.
  * symbolTables:  A pointer to the vector containing the symbol tables.
+ * 
+ * returns:       true if an error is found, false otherwise.
  */
-static void traverse(astNode *node, vector<set<string>> *symbolTables) {
+static bool traverse(astNode *node, vector<set<string>> *symbolTables) {
+	bool errorFound = 0;
+
+	if (!node) {
+		return errorFound;
+	}
+
 	switch (node->type) {
 		case ast_prog: {
-            traverse(node->prog.ext1, symbolTables); 
-			traverse(node->prog.ext2, symbolTables);
-			traverse(node->prog.func, symbolTables);
+            errorFound = traverse(node->prog.ext1, symbolTables) || errorFound; 
+			errorFound = traverse(node->prog.ext2, symbolTables) || errorFound; 
+			errorFound = traverse(node->prog.func, symbolTables) || errorFound; 
 			break;
 		}
 
@@ -87,7 +105,7 @@ static void traverse(astNode *node, vector<set<string>> *symbolTables) {
 			}
 
 			// traverse the body of the function
-			traverse(node->func.body, symbolTables);
+			errorFound = traverse(node->func.body, symbolTables) || errorFound; 
 
 			// pop the symbol table from the stack
 			symbolTables->pop_back();
@@ -96,7 +114,7 @@ static void traverse(astNode *node, vector<set<string>> *symbolTables) {
 		}
 
 		case ast_stmt: {
-			traverseStmt(&node->stmt, symbolTables);
+			errorFound = traverseStmt(&node->stmt, symbolTables) || errorFound; 
 			break;
 		}
 
@@ -114,6 +132,7 @@ static void traverse(astNode *node, vector<set<string>> *symbolTables) {
 			if (!found) {
 				// variable not found in symbol table
 				printf("Error: undeclared variable '%s'\n", node->var.name);
+				errorFound = true; // Unsuccessful semantic analysis due to undeclared variable
 			}
 
 			break;
@@ -125,22 +144,23 @@ static void traverse(astNode *node, vector<set<string>> *symbolTables) {
 		}
 
 		case ast_rexpr: {
-			traverse(node->rexpr.lhs, symbolTables);
-			traverse(node->rexpr.rhs, symbolTables);
+			errorFound = traverse(node->rexpr.lhs, symbolTables) || errorFound; 
+			errorFound = traverse(node->rexpr.rhs, symbolTables) || errorFound; 
 			break;
 		}
 
 		case ast_bexpr: {
-			traverse(node->bexpr.lhs, symbolTables);
-			traverse(node->bexpr.rhs, symbolTables);
+			errorFound = traverse(node->bexpr.lhs, symbolTables) || errorFound; 
+			errorFound = traverse(node->bexpr.rhs, symbolTables) || errorFound; 
 			break;
 		}
 
 		case ast_uexpr: {
-			traverse(node->uexpr.expr, symbolTables);
+			errorFound = traverse(node->uexpr.expr, symbolTables) || errorFound; 
 			break;
 		}
 	}
+	return errorFound;
 }
 
 /**************** traverseStmt() ****************/
@@ -151,22 +171,25 @@ static void traverse(astNode *node, vector<set<string>> *symbolTables) {
  *
  * stmt:          The current AST statement node being traversed.
  * symbolTables:  A pointer to the vector containing the symbol tables.
+ * 
+ * returns:       true if an error is found, false otherwise.
  */
-static void traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables) {
+static bool traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables) {
+	bool errorFound = 0;
 	if (!stmt) {
-		return;
+		return errorFound;
 	}
 
 	switch (stmt->type) {
 		case ast_call: {
 			if (stmt->call.param) {
-				traverse(stmt->call.param, symbolTables);
+				errorFound = traverse(stmt->call.param, symbolTables) || errorFound; 
 			}
 			break;
 		}
 		
 		case ast_ret: {
-			traverse(stmt->ret.expr, symbolTables);
+			errorFound = traverse(stmt->ret.expr, symbolTables) || errorFound; 
 			break;
 		}
 
@@ -177,7 +200,7 @@ static void traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables) {
 
 			// visit all nodes in the statement list of block statement 
 			for (auto &node : *stmt->block.stmt_list) {
-				traverse(node, symbolTables);
+				errorFound |= traverse(node, symbolTables);
 			}
 
 			// pop the symbol table from the stack
@@ -187,23 +210,23 @@ static void traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables) {
 		}
 
 		case ast_while: {
-			traverse(stmt->whilen.cond, symbolTables);
-			traverseStmt(&stmt->whilen.body->stmt, symbolTables);
+			errorFound = traverse(stmt->whilen.cond, symbolTables) || errorFound; 
+			errorFound = traverseStmt(&stmt->whilen.body->stmt, symbolTables) || errorFound; 
 			break;
 		}
 
 		case ast_if: {
-			traverse(stmt->ifn.cond, symbolTables);
-			traverseStmt(&stmt->ifn.if_body->stmt, symbolTables);
+			errorFound = traverse(stmt->ifn.cond, symbolTables) || errorFound; 
+			errorFound = traverseStmt(&stmt->ifn.if_body->stmt, symbolTables) || errorFound; 
 			if (stmt->ifn.else_body) {
-				traverseStmt(&stmt->ifn.else_body->stmt, symbolTables);
+				errorFound = traverseStmt(&stmt->ifn.else_body->stmt, symbolTables) || errorFound; 
 			}
 			break;
 		}
 
 		case ast_asgn: {
-			traverse(stmt->asgn.lhs, symbolTables);
-			traverse(stmt->asgn.rhs, symbolTables);
+			errorFound = traverse(stmt->asgn.lhs, symbolTables) || errorFound; 
+			errorFound = traverse(stmt->asgn.rhs, symbolTables) || errorFound; 
 			break;
 		}
 
@@ -212,4 +235,5 @@ static void traverseStmt(astStmt *stmt, vector<set<string>> *symbolTables) {
 			break;
 		}
 	}
+	return errorFound;
 }
