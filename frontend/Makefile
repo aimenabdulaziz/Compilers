@@ -1,6 +1,6 @@
 # MiniC Compiler Makefile
 # Author: Aimen Abdulaziz
-# Date: April 9, 2023
+# Date: Spring 2023
 #
 # This Makefile compiles and links the Lex and Yacc files to generate an 
 # executable. It also provides targets to run tests and clean the build artifacts.
@@ -14,10 +14,10 @@ CXXFLAGS=-std=c++20 -Wextra -Wpedantic
 # Targets
 all: $(SRC).out
 
-$(SRC).out: $(SRC).l $(SRC).y ast.c
+$(SRC).out: $(SRC).l $(SRC).y 
 	yacc -d -v $(SRC).y
 	lex $(SRC).l
-	$(CXX) $(CXXFLAGS) -g -o $(SRC).out lex.yy.c y.tab.c ast.c
+	$(CXX) $(CXXFLAGS) -g -o miniC_main.out lex.yy.c y.tab.c ast.c semantic_analysis.c miniC_main.c
 
 test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)

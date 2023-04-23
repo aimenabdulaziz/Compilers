@@ -2,11 +2,13 @@
 #define AST_H 
 
 #include <cstddef>
-#include<vector>
+#include <vector>
 using namespace std;
 
 struct ast_Node;
 typedef struct ast_Node astNode;
+
+extern astNode *root; // declare root as external variable
 
 struct ast_Stmt;
 typedef struct ast_Stmt astStmt;
@@ -221,7 +223,5 @@ void freeStmt(astNode*);
 
 void printNode(astNode*, int indent=0);
 void printStmt(astStmt*, int indent=0);
-
-void semanticAnalysis(astNode *node);
 
 #endif

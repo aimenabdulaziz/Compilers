@@ -2,4 +2,3 @@
 *.output
 lex.yy.c 
 y.tab.*
-temp.cpp

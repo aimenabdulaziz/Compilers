@@ -10,7 +10,8 @@
  */
  
 %{
-#include "ast.h"
+#include "ast.h" 
+#include "semantic_analysis.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,8 @@
 #include <stack> // C++ stack
 #include <set>
 
-astNode *root; // root of the AST
+extern astNode *root; // root node is defined in ast.h
+
 extern void yyerror(const char *);
 extern int yylex();
 extern FILE *yyin;
@@ -196,36 +198,3 @@ condition:
     ;
 
 %%
-
-int main(int argc, char* argv[]) {
-    if (argc == 2) {
-        yyin = fopen(argv[1], "r");
-        if (!yyin) {
-            fprintf(stderr, "Could not open file '%s'\n", argv[1]);
-            exit(1);
-        }
-    }
-
-    // Parse the input
-    yyparse();
-
-    // Print the AST
-    printNode(root);
-
-    // Perform semantic analysis on the root node
-    semanticAnalysis(root);
-
-    if (yyin != stdin) {
-        fclose(yyin);
-    }
-
-    yylex_destroy();
-    
-    freeNode(root);
-
-    return 0;
-}
-
-void yyerror(const char *) {
-    printf("\nSyntax error (line: %d). Last token: %s\n", yylineno, yytext);
-}

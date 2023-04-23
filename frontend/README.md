@@ -7,8 +7,13 @@ This directory contains the Lex and Yacc files for building a compiler for the M
 1. Clone this repository or download the source files.
 2. Navigate to the directory containing the source files.
 3. Run `make` to build the MiniC lexical analyzer and parser.
-4. Use the following command to compile a MiniC source file: `./miniC.out <input_file>`. Replace `<input_file>` with the path to your MiniC source file.
+4. Use the following command to compile a MiniC source file: `./miniC_main.out <input_file>`. Replace `<input_file>` with the path to your MiniC source file.
 5. The compiled output will be printed on the terminal.
+
+## Semantic Analysis
+
+Semantic Analysis is performed by traversing the AST and checking for undeclared variables. The semantic analysis program print error messages with the undeclared variable name if the test fails. If there is no error message, it means the semantic analysis has successfully passed. The error message looks as follows: `Error: undeclared variable '<var>'` where `<var>` is the variable name. Please not that the same error message will be repeated multiple times if the variable is used more than once.
+
 
 ## Testing
 
