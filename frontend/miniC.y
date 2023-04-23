@@ -156,6 +156,7 @@ assignment_statement:
 
 return_statement:
     RETURN expression { $$ = createRet($2); } 
+    | RETURN LPAREN expression RPAREN { $$ = createRet($3); }
     ;
 
 expression:
