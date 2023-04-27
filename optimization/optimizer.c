@@ -43,7 +43,7 @@ static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2)
 		return false;
 	}
 
-	for (int i = 0; i < numberOfOperands1; i++){
+	for (int i = 0; i < numberOfOperands1; i++) {
 		LLVMValueRef operand1 = LLVMGetOperand(instruction1, i);
 		LLVMValueRef operand2 = LLVMGetOperand(instruction2, i);
 
@@ -154,6 +154,46 @@ static void commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 	}
 }
 
+/* Helper function to check if an instruction has any uses */
+static bool hasUses(LLVMValueRef instruction) {
+	return LLVMGetFirstUse(instruction) != NULL;
+}
+
+/* Generally there might be more instruction that may have side effects. 
+ * But, for the miniC, we only need to check for Call, Store, and Return 
+ * instructions.
+ */
+static bool hasSideEffects(LLVMValueRef instruction) {
+	return LLVMIsACallInst(instruction) || LLVMIsAStoreInst(instruction)
+	|| LLVMIsAReturnInst(instruction);
+}
+
+static void deadCodeElimination(LLVMBasicBlockRef basicBlock) {
+	vector<LLVMValueRef> toDelete;
+
+  	// Iterate over all the instructions in the basic block
+	for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
+		instruction; instruction = LLVMGetNextInstruction(instruction)) {
+
+		if (!hasUses(instruction) && !hasSideEffects(instruction)) {
+			#ifdef DEBUG
+			printf("\nMarking instruction for deletion:\n");
+			LLVMDumpValue(instruction);
+			#endif
+			toDelete.push_back(instruction);
+		}
+	}
+
+	// Now erase the marked instructions from the basic block
+	for (LLVMValueRef instruction : toDelete) {
+		#ifdef DEBUG
+		printf("\nDeleting instruction:\n");
+		LLVMDumpValue(instruction);
+		#endif
+		LLVMInstructionEraseFromParent(instruction);
+	}
+}
+
 void walkBasicblocks(LLVMValueRef function){
 	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
  			 basicBlock;
@@ -165,6 +205,7 @@ void walkBasicblocks(LLVMValueRef function){
 		
 		// call local optimization functions
 		commonSubexpressionElimination(basicBlock);
+		deadCodeElimination(basicBlock);
 	}
 }
 

@@ -20,6 +20,26 @@ In this example, `%c` is a common subexpression of %a. After CSE, the code would
 %c = %a
 ```
 
+Dead Code Elimination (DCE):
+a. Iterate over each basic block in the function.
+b. For each instruction in the basic block, check if it has any uses.
+c. If the instruction has no uses and is not an instruction with side effects (e.g., a store instruction), remove the instruction using `LLVMInstructionEraseFromParent`.
+
+Example:
+
+```LLVM
+%a = add i32 1, 2
+%b = mul i32 3, 4
+%c = add i32 1, 2
+%d = add i32 %b, 5
+```
+
+In this example, %a and %c are dead code. After DCE, the code would look like:
+
+```LLVM
+%b = mul i32 3, 4
+%d = add i32 %b, 5
+```
 
 
 ## Pseudo code
@@ -37,7 +57,7 @@ function commonSubexpressionElimination(basicBlock):
                 LLVMReplaceAllUsesWith(instruction, prevInstruction)
 
 function isCommonSubexpression(instruction1, instruction2):
-    if sameOpcode(instruction1, instruction2) and sameOperands(instruction1, instruction2):
+    if sameOperands(instruction1, instruction2):
         if not isLoadInstruction(instruction1) and not isLoadInstruction(instruction2):
             return true
         elif safeToReplaceLoadInstructions(instruction1, instruction2):
@@ -46,8 +66,11 @@ function isCommonSubexpression(instruction1, instruction2):
 
 function deadCodeElimination(basicBlock):
     for instruction in basicBlock:
-        if hasNoUses(instruction) and not hasSideEffects(instruction):
-            LLVMInstructionEraseFromParent(instruction)
+        if not hasUses(instruction) and not hasSideEffects(instruction):
+            toDelete.add(instruction)
+    
+    for instr in toDelete:
+        LLVMInstructionEraseFromParent(instr)
 
 function constantFolding(basicBlock):
     for instruction in basicBlock:
