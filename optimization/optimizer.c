@@ -172,14 +172,18 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 	return subExpressionEliminated;
 }
 
-/* Generally there might be more instruction that may have side effects. 
- * But, for the miniC, we only need to check for Call, Store, and Return 
- * instructions.
+/**
+ * @brief Checks if the given instruction has side effects.
+ *
+ * This function checks if an LLVM instruction has side effects by determining 
+ * if it is a store instruction or a terminator instruction. These checks are enough
+ * for miniC, but depending on the programming language, we might need more checks.
+ *
+ * @param instruction The LLVMValueRef representing the instruction to check for side effects.
+ * @return Returns true if the instruction has side effects, false otherwise.
  */
 static bool hasSideEffects(LLVMValueRef instruction) {
-	return LLVMIsACallInst(instruction) || LLVMIsAStoreInst(instruction)
-	|| LLVMIsAReturnInst(instruction);
-	/* CHECK: LLVMIsATerminatorInst */
+	return LLVMIsAStoreInst(instruction) || LLVMIsATerminatorInst(instruction);
 }
 
 // Function to perform dead code elimination in a basic block
