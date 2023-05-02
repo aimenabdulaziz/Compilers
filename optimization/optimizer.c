@@ -48,9 +48,9 @@ static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2)
 		LLVMValueRef operand2 = LLVMGetOperand(instruction2, i);
 
 		#ifdef DEBUG
-		printf("\nOperand 1:\n");
+		printf("\nInstr1 - operand %d:\n", i);
 		LLVMDumpValue(operand1);
-		printf("\nOperand 2:\n");
+		printf("\nInstr2 - operand %d:\n", i);
 		LLVMDumpValue(operand2);
 		#endif
 
@@ -105,18 +105,24 @@ static bool isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instru
 
 }
 
-static void commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
+// Helper function to check if an instruction has any uses 
+static bool hasUses(LLVMValueRef instruction) {
+	return LLVMGetFirstUse(instruction) != NULL;
+}
+
+static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 	// Create an empty hashmap opcode_map of vectors of instructions
 	unordered_map<LLVMOpcode, vector<LLVMValueRef>> opcode_map; // <opcode, vector of instructions>
+	bool subExpressionEliminated = false;
 
 	// Iterate over all the instructions in the basic block
-	for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock); instruction;
-  				instruction = LLVMGetNextInstruction(instruction)) {
+	for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock); 
+		instruction; instruction = LLVMGetNextInstruction(instruction)) {
 
 		// Get the opcode of the instruction
 		LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
 		
-		// Skip alloca instructions
+		// Skip alloca or useless instructions
 		if (op == LLVMAlloca) {
 			continue;
 		}
@@ -133,30 +139,37 @@ static void commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 			#ifdef DEBUG
 			printf("\nChecking...\n");
 			LLVMDumpValue(instruction);
-			printf("\nwith...\n");
+			if (!hasUses(prev_instruction)) {
+				printf("\nInstruction has no uses:\n");
+			}
+			else {	
+				printf("\nwith...\n"); 
+			}
 			LLVMDumpValue(prev_instruction);
 			#endif
 
-			if (isCommonSubexpression(prev_instruction, instruction)) {
-				// Replace all uses of the instruction with the previous instruction
-				LLVMReplaceAllUsesWith(instruction, prev_instruction);
-				
-				#ifdef DEBUG
-				printf("\nReplaced instruction:\n");
-				LLVMDumpValue(instruction);
-				printf("\nwith instruction:\n");
-				LLVMDumpValue(prev_instruction);
-				#endif
-			}
+			LLVMDumpValue(instruction);
+
+		if (hasUses(prev_instruction) && isCommonSubexpression(prev_instruction, instruction)) {
+			// Replace all uses of the instruction with the previous instruction
+			LLVMReplaceAllUsesWith(instruction, prev_instruction);
+			subExpressionEliminated = true;
+
+			#ifdef DEBUG
+			printf("\nReplaced instruction:\n");
+			LLVMDumpValue(instruction);
+			printf("\nwith instruction:\n");
+			LLVMDumpValue(prev_instruction);
+			#endif
+
+			break;
 		}
+	}
 		
 		opcode_map[op].push_back(instruction);
 	}
-}
 
-/* Helper function to check if an instruction has any uses */
-static bool hasUses(LLVMValueRef instruction) {
-	return LLVMGetFirstUse(instruction) != NULL;
+	return subExpressionEliminated;
 }
 
 /* Generally there might be more instruction that may have side effects. 
@@ -166,15 +179,18 @@ static bool hasUses(LLVMValueRef instruction) {
 static bool hasSideEffects(LLVMValueRef instruction) {
 	return LLVMIsACallInst(instruction) || LLVMIsAStoreInst(instruction)
 	|| LLVMIsAReturnInst(instruction);
+	/* CHECK: LLVMIsATerminatorInst */
 }
 
-static void deadCodeElimination(LLVMBasicBlockRef basicBlock) {
-	vector<LLVMValueRef> toDelete;
+// Function to perform dead code elimination in a basic block
+static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
+	std::vector<LLVMValueRef> toDelete;
 
   	// Iterate over all the instructions in the basic block
 	for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
 		instruction; instruction = LLVMGetNextInstruction(instruction)) {
-
+		
+		// If the instruction has no uses and no side effects, mark it for deletion
 		if (!hasUses(instruction) && !hasSideEffects(instruction)) {
 			#ifdef DEBUG
 			printf("\nMarking instruction for deletion:\n");
@@ -192,20 +208,109 @@ static void deadCodeElimination(LLVMBasicBlockRef basicBlock) {
 		#endif
 		LLVMInstructionEraseFromParent(instruction);
 	}
+
+	return toDelete.size() > 0; // return true if any instruction was deleted
 }
 
-void walkBasicblocks(LLVMValueRef function){
-	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+static bool isArithmeticOperation(LLVMValueRef instruction) {
+	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
+	return (op == LLVMAdd || op == LLVMSub || op == LLVMMul);
+}
+
+static bool allOperandsAreConstant(LLVMValueRef instruction) {
+	int numberOfOperands = LLVMGetNumOperands(instruction);
+
+	for (int i = 0; i < numberOfOperands; i++){
+		LLVMValueRef operand = LLVMGetOperand(instruction, i);
+		if (!LLVMIsAConstantInt(operand)) {
+			return false;
+		}
+	}
+
+	#ifdef DEBUG
+	printf("\nAll operands for the following instruction are constants:\n");
+	LLVMDumpValue(instruction);
+	printf("\n");
+	#endif
+
+	return true;
+}
+
+static LLVMValueRef computeConstantArithmetic(LLVMValueRef instruction) {
+	// miniC always has two operands for arithmetic operations
+	LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
+	LLVMValueRef operand2 = LLVMGetOperand(instruction, 1);
+
+	#ifdef DEBUG
+	printf("Computing constant arithmetic for\n");
+	LLVMDumpValue(instruction);
+	printf("\n");
+	#endif
+
+	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
+
+	if (op == LLVMAdd) {
+		return LLVMConstAdd(operand1, operand2);
+	} else if (op == LLVMSub) {
+		return LLVMConstSub(operand1, operand2);
+	} else if (op == LLVMMul) {
+		return LLVMConstMul(operand1, operand2);
+	}
+	return NULL;
+}
+
+static bool constantFolding(LLVMBasicBlockRef basicBlock) {
+	bool codeChanged = false;
+	// Iterate over all the instructions in the basic block
+	for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
+		instruction; instruction = LLVMGetNextInstruction(instruction)) {
+		
+		// If the instruction is an arithmetic operation and all its operands are constants,
+		if (isArithmeticOperation(instruction) && allOperandsAreConstant(instruction)) {
+			LLVMValueRef foldedConstant = computeConstantArithmetic(instruction);
+			LLVMReplaceAllUsesWith(instruction, foldedConstant);
+			codeChanged = true;
+
+			#ifdef DEBUG
+			printf("Folded constant\n");
+			LLVMDumpValue(foldedConstant);
+			printf("\n");
+			#endif
+		}
+	}
+	return codeChanged;
+}
+
+void walkBasicblocks(LLVMValueRef function) {
+	bool codeChanged = true;
+
+	while (codeChanged) {
+		// Reset codeChanged to false before applying optimizations
+		codeChanged = false;
+
+		for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
  			 basicBlock;
   			 basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
 		
-		#ifdef DEBUG
-		printf("In basic block\n");
-		#endif
-		
-		// call local optimization functions
-		commonSubexpressionElimination(basicBlock);
-		deadCodeElimination(basicBlock);
+			#ifdef DEBUG
+			printf("In basic block\n");
+			#endif
+
+			// call local optimization functions
+			commonSubexpressionElimination(basicBlock);	
+			constantFolding(basicBlock);
+			deadCodeElimination(basicBlock);
+			// if (commonSubexpressionElimination(basicBlock) || deadCodeElimination(basicBlock)
+			// 	|| constantFolding(basicBlock)) {
+			// 	codeChanged = true;
+			// }
+			/*
+			 * Constant folding
+			 * Common Subexpression Elimination
+			 * Dead Code Elimination
+			 * Constant Propagation
+			 */
+		}
 	}
 }
 
@@ -265,3 +370,35 @@ int main(int argc, char** argv)
 
 	return 0;
 }
+
+// static void constantPropagation() {
+		// LLVMDumpValue(instruction);
+		// printf("\n");
+		
+		// // Handle store instructions with constant values
+        // if (LLVMGetInstructionOpcode(instruction) == LLVMStore) {
+        //   LLVMValueRef store_val = LLVMGetOperand(instruction, 0);
+        //   LLVMValueRef store_ptr = LLVMGetOperand(instruction, 1);
+
+        //   if (LLVMIsAConstantInt(store_val)) {
+        //     LLVMUseRef user_iter = LLVMGetFirstUse(store_ptr);
+        //     while (user_iter != NULL) {
+        //       LLVMValueRef user_inst = LLVMGetUser(user_iter);
+		// 	  printf("User is \n");
+		// 	  LLVMDumpValue(user_inst);
+        //       if (LLVMIsALoadInst(user_inst)) {
+        //         LLVMReplaceAllUsesWith(user_inst, store_val);
+
+		// 		#ifdef DEBUG
+		// 		printf("\nReplaced instruction:\n");
+		// 		LLVMDumpValue(instruction);
+		// 		printf("\nwith instruction:\n");
+		// 		LLVMDumpValue(store_val);
+		// 		printf("\n");
+		// 		#endif
+        //       }
+        //       user_iter = LLVMGetNextUse(user_iter);
+        //     }
+        //   }
+        // }
+// }

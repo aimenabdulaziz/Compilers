@@ -1,4 +1,4 @@
-//Constant folding
+// Constant propagation and constant folding
 int func(){
  	int a, b,c;
 	
