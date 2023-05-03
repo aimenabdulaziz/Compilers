@@ -172,7 +172,7 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 }
 
 /**
- * @brief Checks if the given instruction has side effects.
+ * @brief Checks if removing the given instruction causes any side effect.
  *
  * This function checks if an LLVM instruction has side effects by determining 
  * if it is a store instruction or a terminator instruction. These checks are enough
@@ -314,114 +314,88 @@ static unordered_map<LLVMValueRef, vector<LLVMValueRef>> buildStoreInstructionsM
 	return storeInstructionsMap;
 }
 
-// This function builds a map of kill sets for each basic block in the function.
-// A kill set is a set of store instructions that are killed (overwritten) by a store instruction in the same basic block.
-static unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> buildKillSetMap(
+/**
+ * @brief Builds kill and gen set maps for a given LLVM function leveraging the store instructions map.
+ *
+ * This function iterates through all basic blocks and instructions in the given LLVM function,
+ * and populates the kill and gen set maps for each basic block. The kill set map contains
+ * store instructions that are killed by other store instructions in the basic block, while
+ * the gen set map contains the store instructions that are generated in the basic block.
+ *
+ * @param function The LLVM function for which kill and gen set maps are to be built.
+ * @param storeInstructionsMap The map of store instructions affecting the same pointer.
+ * @param killSetMap Pointer to the map that will store the kill sets for each basic block.
+ * @param genSetMap Pointer to the map that will store the gen sets for each basic block.
+ */
+static void buildKillNGenSetMaps(
     LLVMValueRef function,
-    unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap) {
-
-    // Declare an unordered_map to store the kill set for each basic block.
-    unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> killSetMap;
+    unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
+    unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> *killSetMap,
+    unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> *genSetMap) {
 
     // Iterate through all basic blocks in the function.
     for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
          basicBlock;
          basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
 
-		// Iterate through all instructions in the basic block.
-		for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
-			instruction;
-			instruction = LLVMGetNextInstruction(instruction)) {
-
-			// If the basic block is not already in the killSetMap, add it with an empty vector.
-			if (killSetMap.find(basicBlock) == killSetMap.end()) {
-				killSetMap[basicBlock] = vector<LLVMValueRef>();
-			}
-
-			// Skip non-store instructions.
-			if (!LLVMIsAStoreInst(instruction)) {
-				continue;
-			}
-
-			LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
-
-			// Iterate over the vector of store instructions that modify the same pointer.
-			for (LLVMValueRef storedInstr : storeInstructionsMap[storePtr]) {
-
-				// If the stored instruction is not the current instruction,
-				// add it to the kill set for the current basic block.
-				if (storedInstr != instruction) {
-					killSetMap[basicBlock].push_back(storedInstr);
-				}
-			}
-		}
-    }
-
-    // Return the constructed kill set map.
-    return killSetMap;
-}
-
-static unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> buildGenSetMap(
-	LLVMValueRef function,
-	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap) {
-
-	// Declare an unordered_map to store the GEN set for each basic block.
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap;
-	// Iterate over all the basic blocks in the function
-	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-		
-		// Iterate through all instructions in the basic block.
+        // Iterate through all instructions in the basic block.
         for (LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
              instruction;
              instruction = LLVMGetNextInstruction(instruction)) {
 
-			// If the basic block is not already in the genSetMap, add it with an empty vector.
-			if (genSetMap.find(basicBlock) == genSetMap.end()) {
-				genSetMap[basicBlock] = unordered_set<LLVMValueRef>();
-			}
+            // Initialize empty kill and gen sets for basic blocks not already in the maps.
+            if (killSetMap->find(basicBlock) == killSetMap->end()) {
+                (*killSetMap)[basicBlock] = vector<LLVMValueRef>();
+            }
+            if (genSetMap->find(basicBlock) == genSetMap->end()) {
+                (*genSetMap)[basicBlock] = unordered_set<LLVMValueRef>();
+            }
 
-			// Skip non-store instructions
-			if (!LLVMIsAStoreInst(instruction)) {
-				continue;
-			}
+            // Skip non-store instructions.
+            if (!LLVMIsAStoreInst(instruction)) {
+                continue;
+            }
 
-			LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
+            LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
 
-			// Add each store instruction to the GEN set for the basic block
-			genSetMap[basicBlock].insert(instruction);
+            // Add the current store instruction to the gen set for the basic block.
+            (*genSetMap)[basicBlock].insert(instruction);
 
-			// If there is any instruction killed by the current instruction, remove it from the GEN set
-			for (LLVMValueRef killedInstr : storeInstructionsMap[storePtr]) {
-				if (killedInstr != instruction && genSetMap[basicBlock].find(killedInstr) != genSetMap[basicBlock].end()) {
-					// removed killedInstr from genSetMap[basicBlock]
-					genSetMap[basicBlock].erase(killedInstr);
+            // Iterate over the vector of store instructions that modify the same pointer.
+            for (LLVMValueRef storedInstr : storeInstructionsMap[storePtr]) {
 
-					#ifdef DEBUG
-					printf("\nRemoved instruction from GEN set:\n");
-					LLVMDumpValue(killedInstr);
-					printf("\n was killed by instruction:\n");
-					LLVMDumpValue(instruction);
-					printf("\n");
-					#endif
-				}
-			}
-		}
-	}
+                // Add instructions to the kill set if they are different from the current instruction.
+                if (storedInstr != instruction) {
+                    (*killSetMap)[basicBlock].push_back(storedInstr);
+                }
 
-	return genSetMap;
+                // If there is any instruction killed by adding the current instruction, remove it from the GEN set.
+                if ((*genSetMap)[basicBlock].find(storedInstr) != (*genSetMap)[basicBlock].end() && storedInstr != instruction) {
+                    (*genSetMap)[basicBlock].erase(storedInstr);
+
+                    #ifdef DEBUG
+                    printf("\nRemoved instruction from GEN set:\n");
+                    LLVMDumpValue(killedInstr);
+                    printf("\n was killed by instruction:\n");
+                    LLVMDumpValue(instruction);
+                    printf("\n");
+                    #endif
+                }
+            }
+        }
+    }
 }
+
 
 static void constantPropagation(LLVMValueRef function) {
 	// Build a map of store instructions
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap = buildStoreInstructionsMap(function);
 
-	// Build KILL set for each basic block
-	unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> killSetMap = buildKillSetMap(function, storeInstructionsMap);
+	// Declare KILL and GEN Maps and populate them
+	unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> killSetMap;
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap;
+	buildKillNGenSetMaps(function, storeInstructionsMap, &killSetMap, &genSetMap);	
 
-	// Build GEN set for each basic block
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap = buildGenSetMap(function, storeInstructionsMap);
 }
 
 void optimizeFunction(LLVMValueRef function) {
