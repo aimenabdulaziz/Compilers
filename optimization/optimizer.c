@@ -148,8 +148,6 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 			LLVMDumpValue(prev_instruction);
 			#endif
 
-			LLVMDumpValue(instruction);
-
 		if (hasUses(prev_instruction) && isCommonSubexpression(prev_instruction, instruction)) {
 			// Replace all uses of the instruction with the previous instruction
 			LLVMReplaceAllUsesWith(instruction, prev_instruction);
@@ -296,24 +294,24 @@ void walkBasicblocks(LLVMValueRef function) {
  			 basicBlock;
   			 basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
 		
+			// call local optimization functions
+			codeChanged = constantFolding(basicBlock) || codeChanged;
 			#ifdef DEBUG
-			printf("In basic block\n");
+			printf("\nConstant folding: %d\n", codeChanged);
+			printf("______________________________________\n");
 			#endif
 
-			// call local optimization functions
-			commonSubexpressionElimination(basicBlock);	
-			constantFolding(basicBlock);
-			deadCodeElimination(basicBlock);
-			// if (commonSubexpressionElimination(basicBlock) || deadCodeElimination(basicBlock)
-			// 	|| constantFolding(basicBlock)) {
-			// 	codeChanged = true;
-			// }
-			/*
-			 * Constant folding
-			 * Common Subexpression Elimination
-			 * Dead Code Elimination
-			 * Constant Propagation
-			 */
+			codeChanged = commonSubexpressionElimination(basicBlock) || codeChanged;
+			#ifdef DEBUG
+			printf("\nCommon expression: %d\n", codeChanged);
+			printf("______________________________________\n");
+			#endif
+			
+			codeChanged = deadCodeElimination(basicBlock) || codeChanged;
+			#ifdef DEBUG
+			printf("\nDead code: %d\n", codeChanged);
+			printf("______________________________________\n");
+			#endif
 		}
 	}
 }
@@ -330,6 +328,13 @@ void walkFunctions(LLVMModuleRef module){
 		#endif
 
 		walkBasicblocks(function);
+
+		/*
+		* Constant folding
+		* Common Subexpression Elimination
+		* Dead Code Elimination
+		* Constant Propagation
+		*/
  	}
 }
 
