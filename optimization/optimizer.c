@@ -473,6 +473,28 @@ static unordered_set<LLVMValueRef> findUnionOfInAndGen(
 	return result;
 }
 
+static void printOutNInMaps(LLVMValueRef function, 
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap) {
+		
+	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+		basicBlock;
+		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		fprintf(stderr, "\nBasic Block:\n");
+		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
+		fprintf(stderr,"\nIN set:\n");
+		for (LLVMValueRef instruction : inSetMap[basicBlock]) {
+			LLVMDumpValue(instruction);
+			printf("\n");
+		}
+		fprintf(stderr, "\nOUT set:\n");
+		for (LLVMValueRef instruction : outSetMap[basicBlock]) {
+			LLVMDumpValue(instruction);
+			fprintf(stderr, "\n");
+		}
+	}
+}
+
 static void constantPropagation(LLVMValueRef function) {
 	// Build a map of store instructions
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap = buildStoreInstructionsMap(function);
@@ -488,7 +510,6 @@ static void constantPropagation(LLVMValueRef function) {
 	// Initialize the IN and OUT sets for each basic block
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap;
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap;
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> oldOutSetMap;
 
 	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
 		basicBlock;
@@ -497,31 +518,14 @@ static void constantPropagation(LLVMValueRef function) {
 		// Initialize the IN and OUT sets for each basic block
 		inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
 		outSetMap[basicBlock] = genSetMap[basicBlock];
-		oldOutSetMap[basicBlock] = genSetMap[basicBlock];
 	}
 
 	// IN and OUT sets
 	bool codeChanged = true;
-	
 
 	// #ifdef DEBUG
 	fprintf(stderr, "\nInitial IN and OUT sets:\n");
-	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-		printf("\nBasic Block:\n");
-		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
-		fprintf(stderr,"\nIN set:\n");
-		for (LLVMValueRef instruction : inSetMap[basicBlock]) {
-			LLVMDumpValue(instruction);
-			printf("\n");
-		}
-		fprintf(stderr, "\nOUT set:\n");
-		for (LLVMValueRef instruction : outSetMap[basicBlock]) {
-			LLVMDumpValue(instruction);
-			fprintf(stderr, "\n");
-		}
-	}
+	printOutNInMaps(function, outSetMap, inSetMap);
 	int iteration = 0;
 	// #endif
 	while (codeChanged) {
@@ -532,36 +536,22 @@ static void constantPropagation(LLVMValueRef function) {
 			basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
 			
 			// IN[B] = U OUT[P] for all P in pred(B)
-			inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, oldOutSetMap);
-			
-			// store the old OUT set for the current basic block
-			oldOutSetMap[basicBlock] = outSetMap[basicBlock];
+			inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, outSetMap);
 
 			// OUT[B] = (IN[B] - KILL[B]) U GEN[B]
-			outSetMap[basicBlock] = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
+			unordered_set<LLVMValueRef> newOut = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
 
-			if (outSetMap[basicBlock] != oldOutSetMap[basicBlock]) {
+			// Check if the OUT set has changed
+			if (outSetMap[basicBlock] != newOut) {
 				codeChanged = true;
 			}
+
+			outSetMap[basicBlock] = newOut;
 		}
+
 		// #ifdef DEBUG
 		fprintf(stderr,"\nIteration %d:\n", iteration);
-		for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-			basicBlock;
-			basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-			fprintf(stderr,"\nBasic Block:\n");
-			LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
-			fprintf(stderr,"\nIN set:\n");
-			for (LLVMValueRef instruction : inSetMap[basicBlock]) {
-				LLVMDumpValue(instruction);
-				fprintf(stderr,"\n");
-			}
-			fprintf(stderr,"\nOUT set:\n");
-			for (LLVMValueRef instruction : outSetMap[basicBlock]) {
-				LLVMDumpValue(instruction);
-				fprintf(stderr,("\n"));
-			}
-		}
+		printOutNInMaps(function, outSetMap, inSetMap);
 		iteration += 1;
 		// #endif
 	}
