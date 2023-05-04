@@ -14,8 +14,8 @@ else
     CXXFLAGS = -g
 endif
 
-$(OPTIMIZER): $(OPTIMIZER).c
-	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags` -I /usr/include/llvm-c-15/ -x c++ -c $(OPTIMIZER).c
+$(OPTIMIZER): $(OPTIMIZER).cpp
+	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags` -I /usr/include/llvm-c-15/ -x c++ -c $(OPTIMIZER).cpp
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` -I /usr/include/llvm-c-15/ $(OPTIMIZER).o -o $@
 
 llvm_file: $(TEST).c

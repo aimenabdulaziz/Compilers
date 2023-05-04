@@ -495,6 +495,61 @@ static void printOutNInMaps(LLVMValueRef function,
 	}
 }
 
+static void buildInNOutSets(
+	LLVMValueRef function,
+	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> &predMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &killSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &genSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &inSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &outSetMap) {
+
+    for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+         basicBlock;
+         basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+
+        // Initialize the IN and OUT sets for each basic block
+        inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
+        outSetMap[basicBlock] = genSetMap[basicBlock];
+    }
+
+    // IN and OUT sets
+    bool codeChanged = true;
+
+    #ifdef DEBUG
+    fprintf(stderr, "\nInitial IN and OUT sets:\n");
+    printOutNInMaps(function, outSetMap, inSetMap);
+    int iteration = 0;
+    #endif
+
+    while (codeChanged) {
+        codeChanged = false;    
+
+        for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+             basicBlock;
+             basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+            
+            // IN[B] = U OUT[P] for all P in pred(B)
+            inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, outSetMap);
+
+            // OUT[B] = (IN[B] - KILL[B]) U GEN[B]
+            unordered_set<LLVMValueRef> newOut = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
+
+            // Check if the OUT set has changed
+            if (outSetMap[basicBlock] != newOut) {
+                codeChanged = true;
+            }
+
+            outSetMap[basicBlock] = newOut;
+        }
+
+        #ifdef DEBUG
+        fprintf(stderr,"\nIteration %d:\n", iteration);
+        printOutNInMaps(function, outSetMap, inSetMap);
+        iteration += 1;
+        #endif
+    }
+}
+
 static void constantPropagation(LLVMValueRef function) {
 	// Build a map of store instructions
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap = buildStoreInstructionsMap(function);
@@ -511,50 +566,7 @@ static void constantPropagation(LLVMValueRef function) {
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap;
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap;
 
-	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-
-		// Initialize the IN and OUT sets for each basic block
-		inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
-		outSetMap[basicBlock] = genSetMap[basicBlock];
-	}
-
-	// IN and OUT sets
-	bool codeChanged = true;
-
-	// #ifdef DEBUG
-	fprintf(stderr, "\nInitial IN and OUT sets:\n");
-	printOutNInMaps(function, outSetMap, inSetMap);
-	int iteration = 0;
-	// #endif
-	while (codeChanged) {
-		codeChanged = false;	
-
-		for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-			basicBlock;
-			basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-			
-			// IN[B] = U OUT[P] for all P in pred(B)
-			inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, outSetMap);
-
-			// OUT[B] = (IN[B] - KILL[B]) U GEN[B]
-			unordered_set<LLVMValueRef> newOut = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
-
-			// Check if the OUT set has changed
-			if (outSetMap[basicBlock] != newOut) {
-				codeChanged = true;
-			}
-
-			outSetMap[basicBlock] = newOut;
-		}
-
-		// #ifdef DEBUG
-		fprintf(stderr,"\nIteration %d:\n", iteration);
-		printOutNInMaps(function, outSetMap, inSetMap);
-		iteration += 1;
-		// #endif
-	}
+	buildInNOutSets(function, predMap, killSetMap, genSetMap, inSetMap, outSetMap);
 }
 
 void optimizeFunction(LLVMValueRef function) {
@@ -616,14 +628,14 @@ void walkFunctions(LLVMModuleRef module) {
 
 void walkGlobalValues(LLVMModuleRef module){
 	for (LLVMValueRef gVal =  LLVMGetFirstGlobal(module);
-                        gVal;
-                        gVal = LLVMGetNextGlobal(gVal)) {
+        gVal;
+        gVal = LLVMGetNextGlobal(gVal)) {
 
-                const char* gName = LLVMGetValueName(gVal);
-                #ifdef DEBUG
-				printf("Global variable name: %s\n", gName);
-				#endif
-        }
+		const char* gName = LLVMGetValueName(gVal);
+		#ifdef DEBUG
+		printf("Global variable name: %s\n", gName);
+		#endif
+    }
 }
 
 int main(int argc, char** argv)
