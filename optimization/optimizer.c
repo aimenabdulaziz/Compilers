@@ -330,7 +330,7 @@ static unordered_map<LLVMValueRef, vector<LLVMValueRef>> buildStoreInstructionsM
 static void buildKillNGenSetMaps(
     LLVMValueRef function,
     unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
-    unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> *killSetMap,
+    unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> *killSetMap,
     unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> *genSetMap) {
 
     // Iterate through all basic blocks in the function.
@@ -345,7 +345,7 @@ static void buildKillNGenSetMaps(
 
             // Initialize empty kill and gen sets for basic blocks not already in the maps.
             if (killSetMap->find(basicBlock) == killSetMap->end()) {
-                (*killSetMap)[basicBlock] = vector<LLVMValueRef>();
+                (*killSetMap)[basicBlock] = unordered_set<LLVMValueRef>();
             }
             if (genSetMap->find(basicBlock) == genSetMap->end()) {
                 (*genSetMap)[basicBlock] = unordered_set<LLVMValueRef>();
@@ -366,7 +366,7 @@ static void buildKillNGenSetMaps(
 
                 // Add instructions to the kill set if they are different from the current instruction.
                 if (storedInstr != instruction) {
-                    (*killSetMap)[basicBlock].push_back(storedInstr);
+                    (*killSetMap)[basicBlock].insert(storedInstr);
                 }
 
                 // If there is any instruction killed by adding the current instruction, remove it from the GEN set.
@@ -375,7 +375,7 @@ static void buildKillNGenSetMaps(
 
                     #ifdef DEBUG
                     printf("\nRemoved instruction from GEN set:\n");
-                    LLVMDumpValue(killedInstr);
+                    LLVMDumpValue(storedInstr);
                     printf("\n was killed by instruction:\n");
                     LLVMDumpValue(instruction);
                     printf("\n");
@@ -386,16 +386,185 @@ static void buildKillNGenSetMaps(
     }
 }
 
+static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
+	LLVMValueRef function) {
+
+	// Initialize the predecessor map
+	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap;
+	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+         basicBlock;
+         basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+
+		LLVMValueRef bbTerminator = LLVMGetBasicBlockTerminator(basicBlock);
+
+		// Get the number of successors of the basic block
+		unsigned numSuccessors = LLVMGetNumSuccessors(bbTerminator);
+
+		// Iterate over all the successors of the basic block
+		for (unsigned i = 0; i < numSuccessors; i++) {
+			LLVMBasicBlockRef successor = LLVMGetSuccessor(bbTerminator, i);
+
+			// Add the successor to the predecessor map
+			predMap[successor].push_back(basicBlock);
+		}
+	}
+
+	// Print the predecessor map
+	#ifdef DEBUG
+	printf("\nPredecessor map:\n");
+	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		printf("\nBasic Block:\n");
+		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
+		printf("\nPredecessors:\n");
+		for (LLVMBasicBlockRef predBlock : predMap[basicBlock]) {
+			LLVMDumpValue(LLVMBasicBlockAsValue(predBlock));
+			printf("\n");
+		}
+	}
+	#endif
+
+	return predMap;
+}
+
+static unordered_set<LLVMValueRef> findUnionOfAllPredOuts(
+	LLVMBasicBlockRef basicBlock, 
+	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap) {
+
+	// Initialize the union of all predecessors' OUT sets
+	unordered_set<LLVMValueRef> unionOfAllPredOuts;
+
+	// Iterate over all the predecessors of the basic block
+	for (LLVMBasicBlockRef predBlock : predMap[basicBlock]) {
+		// Find the OUT set for the predecessor
+		unordered_set<LLVMValueRef> predOutSet = outSetMap[predBlock];
+
+		// Add the OUT set of the predecessor to the union of all predecessors' OUT sets
+		unionOfAllPredOuts.insert(predOutSet.begin(), predOutSet.end());
+	}
+	return unionOfAllPredOuts;
+}
+
+static unordered_set<LLVMValueRef> findUnionOfInAndGen(
+	LLVMBasicBlockRef basicBlock, 
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> killSetMap, 
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap) {
+	
+	// If IN[B] is empty, return GEN[B]
+	if (inSetMap[basicBlock].empty()) {
+		return genSetMap[basicBlock];
+	}
+
+	// Find (IN[B] - KILL[B])
+	unordered_set<LLVMValueRef> result;
+	for (LLVMValueRef instruction : inSetMap[basicBlock]) {
+		// Only add instruction NOT present in KILL[B]
+		if (killSetMap[basicBlock].find(instruction) == killSetMap[basicBlock].end()) {
+			result.insert(instruction);
+		}
+	}
+
+	// Find (IN[B] - KILL[B]) U GEN[B]
+	result.insert(genSetMap[basicBlock].begin(), genSetMap[basicBlock].end());
+
+	return result;
+}
 
 static void constantPropagation(LLVMValueRef function) {
 	// Build a map of store instructions
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap = buildStoreInstructionsMap(function);
 
 	// Declare KILL and GEN Maps and populate them
-	unordered_map<LLVMBasicBlockRef, vector<LLVMValueRef>> killSetMap;
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> killSetMap;
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap;
 	buildKillNGenSetMaps(function, storeInstructionsMap, &killSetMap, &genSetMap);	
+	
+	// Build a map of all the predecessors of each basic block
+	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap = buildPredMap(function);
 
+	// Initialize the IN and OUT sets for each basic block
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap;
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap;
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> oldOutSetMap;
+
+	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+		basicBlock;
+		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+
+		// Initialize the IN and OUT sets for each basic block
+		inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
+		outSetMap[basicBlock] = genSetMap[basicBlock];
+		oldOutSetMap[basicBlock] = genSetMap[basicBlock];
+	}
+
+	// IN and OUT sets
+	bool codeChanged = true;
+	
+
+	// #ifdef DEBUG
+	fprintf(stderr, "\nInitial IN and OUT sets:\n");
+	for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+		basicBlock;
+		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		printf("\nBasic Block:\n");
+		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
+		fprintf(stderr,"\nIN set:\n");
+		for (LLVMValueRef instruction : inSetMap[basicBlock]) {
+			LLVMDumpValue(instruction);
+			printf("\n");
+		}
+		fprintf(stderr, "\nOUT set:\n");
+		for (LLVMValueRef instruction : outSetMap[basicBlock]) {
+			LLVMDumpValue(instruction);
+			fprintf(stderr, "\n");
+		}
+	}
+	int iteration = 0;
+	// #endif
+	while (codeChanged) {
+		codeChanged = false;	
+
+		for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+			basicBlock;
+			basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+			
+			// IN[B] = U OUT[P] for all P in pred(B)
+			inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, oldOutSetMap);
+			
+			// store the old OUT set for the current basic block
+			oldOutSetMap[basicBlock] = outSetMap[basicBlock];
+
+			// OUT[B] = (IN[B] - KILL[B]) U GEN[B]
+			outSetMap[basicBlock] = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
+
+			if (outSetMap[basicBlock] != oldOutSetMap[basicBlock]) {
+				codeChanged = true;
+			}
+		}
+		// #ifdef DEBUG
+		fprintf(stderr,"\nIteration %d:\n", iteration);
+		for (LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+			basicBlock;
+			basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+			fprintf(stderr,"\nBasic Block:\n");
+			LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
+			fprintf(stderr,"\nIN set:\n");
+			for (LLVMValueRef instruction : inSetMap[basicBlock]) {
+				LLVMDumpValue(instruction);
+				fprintf(stderr,"\n");
+			}
+			fprintf(stderr,"\nOUT set:\n");
+			for (LLVMValueRef instruction : outSetMap[basicBlock]) {
+				LLVMDumpValue(instruction);
+				fprintf(stderr,("\n"));
+			}
+		}
+		iteration += 1;
+		// #endif
+	}
 }
 
 void optimizeFunction(LLVMValueRef function) {
