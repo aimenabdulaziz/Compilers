@@ -752,6 +752,7 @@ int main(int argc, char** argv)
 	}
 	else{
 		mod = NULL;
+		printf("Optimizer: Invalid number of arguments\n");
 		return 1;
 	}
 
