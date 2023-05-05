@@ -137,33 +137,21 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 		// Check if the instruction is a common subexpression by iterating over all the 
 		// previous instructions with the same opcode
 		for (LLVMValueRef prevInstruction : opcodeMap[op]) {
-			#ifdef DEBUG
-			printf("\nChecking...\n");
-			LLVMDumpValue(instruction);
-			if (!hasUses(prevInstruction)) {
-				printf("\nInstruction has no uses:\n");
+			if (hasUses(prevInstruction) && isCommonSubexpression(prevInstruction, instruction)) {
+				// Replace all uses of the instruction with the previous instruction
+				LLVMReplaceAllUsesWith(instruction, prevInstruction);
+				subExpressionEliminated = true;
+
+				#ifdef DEBUG
+				printf("\nReplaced instruction:\n");
+				LLVMDumpValue(instruction);
+				printf("\nwith instruction:\n");
+				LLVMDumpValue(prevInstruction);
+				#endif
+
+				break;
 			}
-			else {	
-				printf("\nwith...\n"); 
-			}
-			LLVMDumpValue(prevInstruction);
-			#endif
-
-		if (hasUses(prevInstruction) && isCommonSubexpression(prevInstruction, instruction)) {
-			// Replace all uses of the instruction with the previous instruction
-			LLVMReplaceAllUsesWith(instruction, prevInstruction);
-			subExpressionEliminated = true;
-
-			#ifdef DEBUG
-			printf("\nReplaced instruction:\n");
-			LLVMDumpValue(instruction);
-			printf("\nwith instruction:\n");
-			LLVMDumpValue(prevInstruction);
-			#endif
-
-			break;
 		}
-	}
 		
 		opcodeMap[op].push_back(instruction);
 	}
@@ -179,10 +167,10 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
  * for miniC, but depending on the programming language, we might need more checks.
  *
  * @param instruction The LLVMValueRef representing the instruction to check for side effects.
- * @return Returns true if the instruction has side effects, false otherwise.
+ * @return Returns true if removing instruction has side effects, false otherwise.
  */
 static bool hasSideEffects(LLVMValueRef instruction) {
-	return LLVMIsAStoreInst(instruction) || LLVMIsATerminatorInst(instruction);
+	return LLVMIsAStoreInst(instruction) || LLVMIsATerminatorInst(instruction) || LLVMIsACallInst(instruction);
 }
 
 // Function to perform dead code elimination in a basic block
