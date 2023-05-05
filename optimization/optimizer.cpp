@@ -782,36 +782,3 @@ int main(int argc, char** argv)
 
 	return 0;
 }
-
-
-// static void constantPropagation() {
-		// LLVMDumpValue(instruction);
-		// printf("\n");
-		
-		// // Handle store instructions with constant values
-        // if (LLVMGetInstructionOpcode(instruction) == LLVMStore) {
-        //   LLVMValueRef store_val = LLVMGetOperand(instruction, 0);
-        //   LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
-
-        //   if (LLVMIsAConstantInt(store_val)) {
-        //     LLVMUseRef user_iter = LLVMGetFirstUse(storePtr);
-        //     while (user_iter != NULL) {
-        //       LLVMValueRef user_inst = LLVMGetUser(user_iter);
-		// 	  printf("User is \n");
-		// 	  LLVMDumpValue(user_inst);
-        //       if (LLVMIsALoadInst(user_inst)) {
-        //         LLVMReplaceAllUsesWith(user_inst, store_val);
-
-		// 		#ifdef DEBUG
-		// 		printf("\nReplaced instruction:\n");
-		// 		LLVMDumpValue(instruction);
-		// 		printf("\nwith instruction:\n");
-		// 		LLVMDumpValue(store_val);
-		// 		printf("\n");
-		// 		#endif
-        //       }
-        //       user_iter = LLVMGetNextUse(user_iter);
-        //     }
-        //   }
-        // }
-// }
