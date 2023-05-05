@@ -30,6 +30,8 @@ extern char *yytext;
  * semantic analysis on the AST.
  */
 int main(int argc, char* argv[]) {
+    int exitCode = 0;
+
     if (argc == 2) {
         yyin = fopen(argv[1], "r");
         if (!yyin) {
@@ -44,8 +46,14 @@ int main(int argc, char* argv[]) {
     // Print the AST
     printNode(root);
 
-    // Perform semantic analysis on the root node
-    semanticAnalysis(root);
+    // Perform semantic analysis on the root node and check for errors
+    bool errorFound = semanticAnalysis(root);
+    if (errorFound) {
+		printf("Result: Semantic analysis unsuccessful.\n");
+        exitCode = 1;
+    } else {
+        printf("Result: Semantic analysis successful.\n");
+    }
 
     if (yyin != stdin) {
         fclose(yyin);
@@ -55,7 +63,7 @@ int main(int argc, char* argv[]) {
     
     freeNode(root);
 
-    return 0;
+    return exitCode;
 }
 
 /* ******************** yyerror ******************** */

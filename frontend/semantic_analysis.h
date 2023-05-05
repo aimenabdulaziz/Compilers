@@ -17,6 +17,6 @@
 /* Takes an Abstract Syntax Tree (AST) node as an argument and performs 
  * the necessary analysis to ensure all variables have been declared before use.
  */
-void semanticAnalysis(astNode *node);
+bool semanticAnalysis(astNode *node);
 
 #endif // MINIC_SEMANTIC_ANALYSIS_H

@@ -42,24 +42,19 @@ void printSymbolTables(const vector<set<string>>& symbolTables) {
  * function, and all necessary helper functions will invoked in 
  * this function.
  * 
+ * returns:       true if an error is found, false otherwise.
  */
-void semanticAnalysis(astNode *node) {
+bool semanticAnalysis(astNode *node) {
     if (!node) {
 		printf("Error: AST is empty\n");
-		return;
+		return false;
 	}
 
     // Declare an empty stack of symbol tables
     vector<set<string>> symbolTables;
 	
 	// Traverse the AST and populate the symbol tables
-	bool errorFound = traverse(node, &symbolTables);
-
-    if (errorFound) {
-		printf("Result: Semantic analysis unsuccessful.\n");
-    } else {
-        printf("Result: Semantic analysis successful.\n");
-    }
+	return traverse(node, &symbolTables);
 }
 
 /**************** traverse() ****************/
