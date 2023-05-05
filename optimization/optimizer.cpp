@@ -215,9 +215,10 @@ static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
 	return toDelete.size() > 0; // return true if any instruction was deleted
 }
 
-static bool isArithmeticOperation(LLVMValueRef instruction) {
+// Icmp - integer compare
+static bool isArithmeticOrIcmpOperation(LLVMValueRef instruction) {
 	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
-	return (op == LLVMAdd || op == LLVMSub || op == LLVMMul);
+	return (op == LLVMAdd || op == LLVMSub || op == LLVMMul || op == LLVMICmp);
 }
 
 static bool allOperandsAreConstant(LLVMValueRef instruction) {
@@ -239,7 +240,7 @@ static bool allOperandsAreConstant(LLVMValueRef instruction) {
 	return true;
 }
 
-static LLVMValueRef computeConstantArithmetic(LLVMValueRef instruction) {
+static LLVMValueRef computeFoldedConstant(LLVMValueRef instruction) {
 	// miniC always has two operands for arithmetic operations
 	LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
 	LLVMValueRef operand2 = LLVMGetOperand(instruction, 1);
@@ -258,7 +259,10 @@ static LLVMValueRef computeConstantArithmetic(LLVMValueRef instruction) {
 		return LLVMConstSub(operand1, operand2);
 	} else if (op == LLVMMul) {
 		return LLVMConstMul(operand1, operand2);
-	}
+	} else if (op == LLVMICmp) {
+		LLVMIntPredicate predicate = LLVMGetICmpPredicate(instruction);
+		return LLVMConstICmp(predicate, operand1, operand2);
+	} 
 	return NULL;
 }
 
@@ -269,8 +273,8 @@ static bool constantFolding(LLVMBasicBlockRef basicBlock) {
 		instruction; instruction = LLVMGetNextInstruction(instruction)) {
 		
 		// If the instruction is an arithmetic operation and all its operands are constants,
-		if (isArithmeticOperation(instruction) && allOperandsAreConstant(instruction)) {
-			LLVMValueRef foldedConstant = computeConstantArithmetic(instruction);
+		if (isArithmeticOrIcmpOperation(instruction) && allOperandsAreConstant(instruction)) {
+			LLVMValueRef foldedConstant = computeFoldedConstant(instruction);
 			LLVMReplaceAllUsesWith(instruction, foldedConstant);
 			codeChanged = true;
 
