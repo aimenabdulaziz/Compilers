@@ -379,9 +379,14 @@ static void buildKillNGenSetMaps(
     }
 }
 
-static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
-	LLVMValueRef function) {
-
+/**
+ * Builds a map of all the predecessors of each basic block in a given function.
+ * 
+ * @param function LLVMValueRef for the function to build the predecessor map for
+ * @return unordered_map of LLVMBasicBlockRef to vector of LLVMBasicBlockRef, 
+ *         where the vector contains all predecessors of a basic block
+ */
+static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(LLVMValueRef function) {
 	// Initialize the predecessor map
 	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap;
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
@@ -421,6 +426,15 @@ static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
 	return predMap;
 }
 
+/**
+ * Given a basic block B, the map of predecessors to B, and the OUT sets of all basic blocks, 
+ * this function returns the union of all predecessors' OUT sets.
+ * 
+ * @param basicBlock: The basic block whose predecessors' OUT sets are to be unioned
+ * @param predMap: The map of predecessors to basicBlock
+ * @param outSetMap: The map of basic block to its OUT set
+ * @return The union of all predecessors' OUT sets
+ */
 static unordered_set<LLVMValueRef> findUnionOfAllPredOuts(
 	LLVMBasicBlockRef basicBlock, 
 	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap,
@@ -440,6 +454,21 @@ static unordered_set<LLVMValueRef> findUnionOfAllPredOuts(
 	return unionOfAllPredOuts;
 }
 
+/**
+ * @brief Finds the union of (IN - KILL) and GEN sets for a basic block in a data flow analysis.
+ *
+ * This function finds the union of (IN - KILL) and GEN sets for a given basic block by
+ * first checking if the IN set is empty. If it is empty, the function returns the GEN set.
+ * If not, it computes the set difference between the IN and KILL sets and adds the
+ * resulting set to the GEN set.
+ *
+ * @param basicBlock The basic block for which the union of IN and GEN sets is to be found.
+ * @param inSetMap A map of IN sets for all basic blocks in the function.
+ * @param killSetMap A map of KILL sets for all basic blocks in the function.
+ * @param genSetMap A map of GEN sets for all basic blocks in the function.
+ *
+ * @return The union of IN and GEN sets for the given basic block.
+ */
 static unordered_set<LLVMValueRef> findUnionOfInAndGen(
 	LLVMBasicBlockRef basicBlock, 
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap,
@@ -466,6 +495,13 @@ static unordered_set<LLVMValueRef> findUnionOfInAndGen(
 	return result;
 }
 
+/**
+ * @brief Prints the IN and OUT sets for each basic block in the given LLVM function.
+ *
+ * @param function The LLVM function for which the IN and OUT sets are to be printed.
+ * @param outSetMap The OUT set map for each basic block.
+ * @param inSetMap The IN set map for each basic block.
+ */
 static void printOutNInMaps(LLVMValueRef function, 
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap,
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap) {
@@ -488,6 +524,20 @@ static void printOutNInMaps(LLVMValueRef function,
 	}
 }
 
+/**
+ * @brief Builds the IN and OUT sets for each basic block in a given LLVM function.
+ *
+ * This function initializes the IN and OUT sets for each basic block in the function.
+ * It then iteratively computes the IN and OUT sets for each basic block using the kill
+ * and gen sets of the basic blocks and the IN and OUT sets of its predecessors.
+ *
+ * @param function The LLVM function for which IN and OUT sets are to be built.
+ * @param predMap A map containing the predecessors of each basic block in the function.
+ * @param killSetMap A map containing the kill sets for each basic block in the function.
+ * @param genSetMap A map containing the gen sets for each basic block in the function.
+ * @param inSetMap A map containing the IN sets for each basic block in the function.
+ * @param outSetMap A map containing the OUT sets for each basic block in the function.
+ */
 static void buildInNOutSets(
 	LLVMValueRef function,
 	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> &predMap,
@@ -495,7 +545,7 @@ static void buildInNOutSets(
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &genSetMap,
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &inSetMap,
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &outSetMap) {
-
+		// Initialize the IN and OUT sets for each basic block
     for (auto basicBlock = LLVMGetFirstBasicBlock(function);
          basicBlock;
          basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
