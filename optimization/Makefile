@@ -37,6 +37,6 @@ $(OPTIMIZER): $(OPTIMIZER).cpp
 
 clean: 
 	rm -rf $(OPTIMIZER)
-	rm -rf *.o
-
+	rm -rf *.o *.out
+	
 .PHONY: clean
