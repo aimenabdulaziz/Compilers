@@ -1,6 +1,6 @@
 /**
  * miniC_semantic_analysis.c
- * -------------------------
+ * 
  * This file contains the implementation of semantic analysis for a
  * Mini-C abstract syntax tree (AST). 
  * 

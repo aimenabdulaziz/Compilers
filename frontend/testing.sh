@@ -1,9 +1,9 @@
 # MiniC Compiler testing script
 #
+# usage: ./testing.sh or make test (strongly recommended)
+#
 # Author: Aimen Abdulaziz
 # Date: Spring, 2023
-#
-# usage: ./testing.sh or make test (strongly recommended)
 #
 #!/bin/bash
 

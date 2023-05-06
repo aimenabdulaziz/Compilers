@@ -1,3 +1,24 @@
+/*
+ * optimizer.cpp
+ *
+ * This file implements local and global optimizers for miniC language using LLVM
+ *
+ * The optimizer performs the following transformations:
+ * 1. Constant folding: Replace arithmetic operations with constants of the operands result
+ * 2. Dead code elimination: Remove instructions that have no uses and no side effects
+ * 3. Common subexpression elimination: Replace multiple identical computations with a single computation
+ * 4. Constant propagation: Replace load instructions with constants if all the stores that write to the 
+ * 							memory location being read have the same constant value.
+ * 
+ * Usage: ./optimizer <input-file>
+ * 
+ * Output: The optimized LLVM IR code is save to a file named <input-file>_optimized in the same directory 
+ * 		   as the input file
+ *
+ * Author: Aimen Abdulaziz
+ * Date: Spring, 2023
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -180,7 +201,7 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 }
 
 /**
- * @brief Checks if removing the given instruction causes any side effect.
+ * @brief Checks if removing the given instruction causes any side effects.
  *
  * This function checks if an LLVM instruction has side effects by determining 
  * if it is a store instruction or a terminator instruction. These checks are enough

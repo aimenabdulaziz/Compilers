@@ -1,11 +1,12 @@
 /*
  * Main file for MiniC Compiler
- * Author: Aimen Abdulaziz
- * Date: Spring, 2023
  *
  * This file contains the main function for the MiniC Compiler,
  * which reads in a MiniC file, parses it, outputs the AST, and perform 
  * semantic analysis.
+ * 
+ * Author: Aimen Abdulaziz
+ * Date: Spring, 2023
  */
 
 #include "ast.h" 

@@ -1,3 +1,19 @@
+/*
+ * optimizer.h - Header file for the optimizer module
+ *
+ * This module provides functionality to optimize LLVM IR code by applying
+ * various optimization techniques, such as constant propagation, constant folding,
+ * common subexpression elimination, and dead code elimination. It provides
+ * functions to optimize a single function or the entire program (LLVM module).
+ *
+ * Functions:
+ *  - optimizeFunction: Optimizes a single LLVM function
+ *  - optimizeProgram: Optimizes the entire program (LLVM module)
+ *
+ * Author: Aimen Abdulaziz
+ * Date: Spring 2023
+ */
+
 #ifndef OPTIMIZER_H
 #define OPTIMIZER_H
 

@@ -1,14 +1,6 @@
 # CS57 - Compilers
 ## Aimen Abdulaziz (F0055HS), Spring 2023
 
-
-MiniC
-
-- Can't have more than one expression in one line.
-- MiniC always have two external declarations 
-- [will update later]
-
-
 ## Building and Running the Program
 
 1. Clone the repository and navigate to the root directory.
@@ -29,3 +21,10 @@ The script will then:
 - Run the semantic analysis on the input file.
 - Generate LLVM IR code for the input file.
 - Optimize the LLVM IR code using the optimizer.
+
+MiniC
+
+- Can't have more than one expression in one line.
+- MiniC always have two external declarations 
+- [will update later]
+

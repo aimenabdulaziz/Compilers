@@ -1,9 +1,29 @@
-# MiniC Compiler Makefile
+# Makefile for the miniC compiler
+#
+# This Makefile compiles the miniC compiler, which includes lexical analysis,
+# syntax analysis, Abstract Syntax Tree (AST) generation, and semantic analysis.
+# It also provides targets for testing and running the compiler with Valgrind.
+#
+# Variables:
+#   - SRC: Source file prefix for the miniC compiler
+#   - TEST_PROG: Name of the test script
+#   - CXX: C++ compiler
+#   - CXXFLAGS: Compiler flags
+#
+# Targets:
+#   - all: Builds the miniC compiler executable
+#   - test: Runs the test script with the miniC compiler
+#   - valgrind: Runs the miniC compiler with Valgrind to check for memory leaks
+#   - clean: Removes build artifacts
+#
+# Usage:
+#   - make: Build the miniC compiler executable
+#   - make test: Run the test script
+#   - make valgrind: Run the compiler with Valgrind
+#   - make clean: Clean the build artifacts
+#
 # Author: Aimen Abdulaziz
 # Date: Spring 2023
-#
-# This Makefile compiles and links the Lex and Yacc files to generate an 
-# executable. It also provides targets to run tests and clean the build artifacts.
 
 # Variables
 SRC = miniC

@@ -14,7 +14,6 @@ This directory contains the Lex, Yacc, and Sentiment Analysis files for building
 
 Semantic Analysis is performed by traversing the AST and checking for undeclared variables. The semantic analysis program print error messages with the undeclared variable name if the test fails. The error message looks as follows: `Error: undeclared variable '<var>'` where `<var>` is the variable name. Please note that the same error message will be repeated multiple times if the variable is used more than once. Upon the completion of the semantic analysis, a one sentence result is printed whether or not the analysis was successful. 
 
-
 ## Testing
 
 To test the MiniC lexical analyzer and parser with a sample MiniC program, run `make test`. This will run the series of testing miniC programs in the `tests` directory. I strongly recommend redirecting the output to another file.
@@ -26,7 +25,7 @@ make test &> testing.out
 
 One sample valgrind test has been added as a phony to the Makefile, but feel free to use your own test cases. You may run the sample valgrind test with the following command:
 ```bash
-Make valgrind
+make valgrind
 ```
 
 ## Clean Up
