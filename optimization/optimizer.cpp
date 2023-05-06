@@ -12,30 +12,13 @@
 #include <vector>
 using namespace std;
 
-#define prt(x) if(x) { printf("%s\n", x); }
-
-LLVMModuleRef createLLVMModel(char *filename) {
-	char *err = 0;
-
-	LLVMMemoryBufferRef ll_f = 0;
-	LLVMModuleRef m = 0;
-
-	LLVMCreateMemoryBufferWithContentsOfFile(filename, &ll_f, &err);
-
-	if (err != NULL) { 
-		prt(err);
-		return NULL;
-	}
-	
-	LLVMParseIRInContext(LLVMGetGlobalContext(), ll_f, &m, &err);
-
-	if (err != NULL) {
-		prt(err);
-	}
-
-	return m;
-}
-
+/**
+ * Checks if two LLVM instructions have the same operands.
+ *
+ * @param instruction1 The first instruction.
+ * @param instruction2 The second instruction.
+ * @return True if both instructions have the same operands, false otherwise.
+ */
 static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2) {
 	int numberOfOperands1 = LLVMGetNumOperands(instruction1);
 	int numberOfOperands2 = LLVMGetNumOperands(instruction2);
@@ -63,7 +46,14 @@ static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2)
 	return true;
 }
 
-/* Safety Check to see if the memory address of two Load instructions has been modified in between */
+/**
+ * Check if it is safe to replace the first Load instruction with the second Load instruction.
+ * It is safe if there are no Store instructions between them that modify the pointer operand.
+ *
+ * @param instruction1 the first Load instruction
+ * @param instruction2 the second Load instruction
+ * @return true if it is safe to replace, false otherwise
+ */
 static bool safeToReplaceLoadInstructions(LLVMValueRef instruction1, LLVMValueRef instruction2) {
 	// Get the pointer operand 
 	LLVMValueRef ptr1 = LLVMGetOperand(instruction1, 0);
@@ -94,6 +84,18 @@ static bool safeToReplaceLoadInstructions(LLVMValueRef instruction1, LLVMValueRe
 	return true;
 }
 
+/**
+ * Determines whether two instructions represent a common subexpression.
+ * 
+ * Two instructions are considered a common subexpression if they have the same opcode and
+ * operands. If both instructions are not load instructions, they are considered a common
+ * subexpression. If one or both instructions are load instructions, they are considered
+ * a common subexpression only if it is safe to replace one load with the other.
+ *
+ * @param instruction1 The first instruction.
+ * @param instruction2 The second instruction.
+ * @return true if the instructions represent a common subexpression, false otherwise.
+ */
 static bool isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instruction2) {
 	if (isSameOperands(instruction1, instruction2)) {
 		if (!LLVMIsALoadInst(instruction1) && !LLVMIsALoadInst(instruction2)) {
@@ -106,11 +108,28 @@ static bool isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instru
 
 }
 
-// Helper function to check if an instruction has any uses 
+/**
+ * Determines whether an LLVM instruction has any uses.
+ *
+ * @param instruction the instruction to check
+ * @return true if the instruction has any uses, false otherwise
+ */
 static bool hasUses(LLVMValueRef instruction) {
 	return LLVMGetFirstUse(instruction) != NULL;
 }
 
+/**
+ * @brief Eliminate common subexpressions in an LLVM basic block.
+ *
+ * This function iterates over all the instructions in the basic block and keeps track
+ * of each opcode and its corresponding instruction in a hashmap. For each instruction,
+ * it checks if it is a common subexpression by iterating over all the previous
+ * instructions with the same opcode. If it is a common subexpression, it replaces all
+ * uses of the instruction with the previous instruction.
+ *
+ * @param basicBlock The LLVM basic block to perform common subexpression elimination on.
+ * @return true if any common subexpression was eliminated, false otherwise.
+ */
 static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 	// Create an empty hashmap opcodeMap of vectors of instructions
 	unordered_map<LLVMOpcode, vector<LLVMValueRef>> opcodeMap; // <opcode, vector of instructions>
@@ -174,7 +193,37 @@ static bool hasSideEffects(LLVMValueRef instruction) {
 	return LLVMIsAStoreInst(instruction) || LLVMIsATerminatorInst(instruction) || LLVMIsACallInst(instruction);
 }
 
-// Function to perform dead code elimination in a basic block
+/**
+ * @brief Deletes all instructions marked for deletion in the toDelete vector.
+ *
+ * This function iterates through the toDelete vector and erases the corresponding instructions
+ * from their parent basic block.
+ *
+ * @param toDelete The vector that stores the instructions to be deleted.
+ */
+void deleteMarkedInstructions(vector<LLVMValueRef> &toDelete) {
+    // Now erase the marked instructions from the basic block
+    for (auto instruction : toDelete) {
+		#ifdef DEBUG
+		printf("\nDeleting instruction:\n");
+		LLVMDumpValue(instruction);
+		printf("\n");
+		#endif
+
+        LLVMInstructionEraseFromParent(instruction);
+    }
+}
+
+/**
+ * @brief This function performs dead code elimination on a given basic block.
+ * 
+ * It iterates over all instructions in the basic block, and if an instruction 
+ * has no uses and no side effects, it is marked for deletion. Afterwards, all 
+ * the marked instructions are erased from the basic block.
+ *
+ * @param basicBlock the basic block on which to perform dead code elimination
+ * @return true if any instruction was deleted, false otherwise
+ */
 static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
 	vector<LLVMValueRef> toDelete;
 
@@ -193,23 +242,28 @@ static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
 	}
 
 	// Now erase the marked instructions from the basic block
-	for (auto instruction : toDelete) {
-		#ifdef DEBUG
-		printf("\nDeleting instruction:\n");
-		LLVMDumpValue(instruction);
-		#endif
-		LLVMInstructionEraseFromParent(instruction);
-	}
+	deleteMarkedInstructions(toDelete);
 
 	return toDelete.size() > 0; // return true if any instruction was deleted
 }
 
-// Icmp - integer compare
+/**
+ * Check whether an LLVM instruction is an arithmetic (+-*) or an icmp operation.
+ *
+ * @param instruction the LLVM instruction to check
+ * @return true if the instruction is an arithmetic or an icmp operation, false otherwise
+ */
 static bool isArithmeticOrIcmpOperation(LLVMValueRef instruction) {
 	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
 	return (op == LLVMAdd || op == LLVMSub || op == LLVMMul || op == LLVMICmp);
 }
 
+/**
+ * Checks if all operands of the given LLVM instruction are constant integers.
+ *
+ * @param instruction The LLVM instruction to check.
+ * @return True if all operands are constant integers, false otherwise.
+ */
 static bool allOperandsAreConstant(LLVMValueRef instruction) {
 	int numberOfOperands = LLVMGetNumOperands(instruction);
 
@@ -229,6 +283,12 @@ static bool allOperandsAreConstant(LLVMValueRef instruction) {
 	return true;
 }
 
+/**
+ * Computes and returns the folded constant for a given arithmetic or icmp instruction.
+ *
+ * @param instruction The instruction to compute the folded constant for.
+ * @return The folded constant as a LLVMValueRef, or NULL if the instruction cannot be folded.
+ */
 static LLVMValueRef computeFoldedConstant(LLVMValueRef instruction) {
 	// miniC always has two operands for arithmetic operations
 	LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
@@ -255,6 +315,13 @@ static LLVMValueRef computeFoldedConstant(LLVMValueRef instruction) {
 	return NULL;
 }
 
+/**
+ * Applies constant folding optimization to all arithmetic or icmp instructions in a given basic block where
+ * all operands are constants.
+ *
+ * @param basicBlock the basic block to apply constant folding to.
+ * @return true if any constant folding occurred in the basic block, false otherwise.
+ */
 static bool constantFolding(LLVMBasicBlockRef basicBlock) {
 	bool codeChanged = false;
 	// Iterate over all the instructions in the basic block
@@ -277,6 +344,12 @@ static bool constantFolding(LLVMBasicBlockRef basicBlock) {
 	return codeChanged;
 }
 
+/**
+ * Builds a map of all store instructions that write to the same memory address.
+ * @param function The LLVM function for which the store instructions map needs to be built.
+ * @return An unordered map of store instructions map, where the key is the memory address being stored
+ *         and the value is a vector of all store instructions that write to that memory address.
+ */
 static unordered_map<LLVMValueRef, vector<LLVMValueRef>> buildStoreInstructionsMap(LLVMValueRef function) {
 	// <ptr for storing, vector of other store instruction that store in the same ptr>
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap; 
@@ -411,8 +484,8 @@ static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
 	#ifdef DEBUG
 	printf("\nPredecessor map:\n");
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-		 basicBlock;
-		 basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		basicBlock;
+		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
 		printf("\nBasic Block:\n");
 		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
 		printf("\nPredecessors:\n");
@@ -766,27 +839,6 @@ void processBasicBlocks(LLVMValueRef function,
 }
 
 /**
- * @brief Deletes all instructions marked for deletion in the toDelete vector.
- *
- * This function iterates through the toDelete vector and erases the corresponding instructions
- * from their parent basic block.
- *
- * @param toDelete The vector that stores the instructions to be deleted.
- */
-void deleteMarkedInstructions(vector<LLVMValueRef> &toDelete) {
-    // Now erase the marked instructions from the basic block
-    for (auto instruction : toDelete) {
-		#ifdef DEBUG
-		printf("\nDeleting instruction:\n");
-		LLVMDumpValue(instruction);
-		printf("\n");
-		#endif
-
-        LLVMInstructionEraseFromParent(instruction);
-    }
-}
-
-/**
  * @brief Performs constant propagation on the given function.
  * 
  * It replaces load instructions with constants if all the stores
@@ -901,6 +953,39 @@ void optimizeProgram(LLVMModuleRef module) {
 }
 
 /**
+ * Create LLVM module from the given filename
+ * @param filename Path to the LLVM IR file
+ * @return LLVMModuleRef representing the module created from the given file, or NULL if error occurs
+ */
+LLVMModuleRef createLLVMModel(char *filename) {
+    char *err = 0;
+
+    LLVMMemoryBufferRef ll_f = 0;
+    LLVMModuleRef m = 0;
+
+    // Read the contents of the file into a memory buffer
+    LLVMCreateMemoryBufferWithContentsOfFile(filename, &ll_f, &err);
+
+    // If there was an error creating the memory buffer, print the error message and return NULL
+    if (err != NULL) { 
+        printf("Error creating memory buffer: %s\n", err);
+        LLVMDisposeMessage(err);
+        return NULL;
+    }
+
+    // Parse the LLVM IR in the memory buffer and create a new module
+	LLVMParseIRInContext(LLVMGetGlobalContext(), ll_f, &m, &err);
+    if (err != NULL) {
+        printf("Error parsing LLVM IR: %s\n", err);
+        LLVMDisposeMessage(err);
+        return NULL;
+    }
+	
+	// Return the LLVM module
+    return m;
+}
+
+/**
  * @brief The main function of the program.
  *
  * This function is the entry point of the program and is called when the program is executed.
@@ -921,7 +1006,7 @@ int main(int argc, char **argv) {
     }
     else{
         mod = NULL;
-        printf("Optimizer: Invalid number of arguments\n");
+        printf("Usage: ./optimizer <sample.ll>\n");
         return 1;
     }
 
@@ -929,7 +1014,8 @@ int main(int argc, char **argv) {
     if (mod != NULL){
         optimizeProgram(mod);
     } else {
-        printf("m is NULL\n");
+        printf("Invalid IR: module is NULL\n");
+		return 2;
     }
 
     // Writing out the LLVM IR
