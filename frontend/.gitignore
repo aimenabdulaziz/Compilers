@@ -2,3 +2,5 @@
 *.output
 lex.yy.c 
 y.tab.*
+ir_builder
+test*

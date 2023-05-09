@@ -7,7 +7,7 @@ This directory contains the Lex, Yacc, and Sentiment Analysis files for building
 1. Clone this repository or download the source files.
 2. Navigate to the directory containing the source files.
 3. Run `make` to build the MiniC lexical analyzer and parser.
-4. Use the following command to compile a MiniC source file: `./miniC_main.out <input_file>`. Replace `<input_file>` with the path to your MiniC source file.3
+4. Use the following command to compile a MiniC source file: `./miniC.out <input_file>`. Replace `<input_file>` with the path to your MiniC source file.3
 5. The compiled output will be printed on the terminal.
 
 ## Semantic Analysis

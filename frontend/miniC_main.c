@@ -11,6 +11,7 @@
 
 #include "ast.h" 
 #include "semantic_analysis.h"
+#include "llvm_ir_generator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,7 @@ int main(int argc, char* argv[]) {
         exitCode = 1;
     } else {
         printf("Result: Semantic analysis successful.\n");
+        generateLLVMIR(root, argv[1]);
     }
 
     if (yyin != stdin) {

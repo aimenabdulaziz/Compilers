@@ -116,7 +116,7 @@ static bool traverse(astNode *node, vector<set<string>> *symbolTables) {
 			// check if the variable appears in one of the symbol tables on the stack
 			bool found = false;
 			for (auto &table : *symbolTables) {
-				if (table.contains(node->var.name)) {
+				if (table.find(node->var.name) != table.end()) {
 					// variable found in symbol table
 					found = true;
 					break;
