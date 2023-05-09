@@ -76,6 +76,8 @@ LLVMValueRef traverseStmttoGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVM
 			break;
 		}
 		case ast_ret: {
+			LLVMValueRef returnValue = traverseASTtoGenerateIR(stmt->ret.expr, module, builder, func, varMap, intType);
+			LLVMBuildRet(builder, returnValue);
 			
 			break;
 		}
@@ -111,6 +113,10 @@ LLVMValueRef traverseStmttoGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVM
 			LLVMPositionBuilderAtEnd(builder, trueBlock);
 			traverseASTtoGenerateIR(stmt->whilen.body, module, builder, func, varMap, intType);
 			LLVMBuildBr(builder, bb);
+
+			// Emit code for the false block
+			LLVMPositionBuilderAtEnd(builder, falseBlock);
+
 			break;
 		}
 		case ast_if: {
