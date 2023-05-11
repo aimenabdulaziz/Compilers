@@ -28,7 +28,7 @@
 # Variables
 SRC = miniC
 TEST_PROG = testing.sh
-IR_GENERATOR = llvm_ir_generator
+IR_GENERATOR = ir_generator
 CXX = g++
 CXXFLAGS = -std=c++20 -Wextra -Wpedantic 
 LLVM_CXXFLAGS = `llvm-config-15 --cxxflags`
