@@ -36,9 +36,9 @@ LLVM_LDFLAGS = `llvm-config-15 --ldflags --libs core`
 LLVM = /usr/include/llvm-c-15/
 
 ifeq ($(DEBUG), 1)
-	CXXFLAGS = -Wextra -Wpedantic -g -gdwarf-4 -Wno-deprecated $(INCLUDES) -DDEBUG
+	CXXFLAGS = -g -DDEBUG -Wextra -Wpedantic  -gdwarf-4 -Wno-deprecated $(INCLUDES) 
 else
-	CXXFLAGS = -Wextra -Wpedantic -g -gdwarf-4 -Wno-deprecated $(INCLUDES)
+	CXXFLAGS = -g -Wextra -Wpedantic -gdwarf-4 -Wno-deprecated $(INCLUDES)
 endif
 
 # Targets
@@ -78,7 +78,7 @@ test: $(TEST_PROG) $(SRC).out
 
 # Target for running the compiler with Valgrind
 valgrind: $(SRC).out
-	valgrind --leak-check=full --show-leak-kinds=all ./$(SRC).out lex_yacc_tests/p1.c
+	valgrind --leak-check=full --show-leak-kinds=all ./$(SRC).out ../tests/ir_generator/p2.c 
 
 # Target for cleaning the build artifacts
 clean:

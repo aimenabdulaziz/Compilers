@@ -8,13 +8,13 @@
 #!/bin/bash
 
 # List of files to run
-dir=tests
+dir=../tests
 
 # Loop through each file and run it with miniC.out
 for i in {1..7}; do
     echo "Running lex_yacc_$dir/p$i.c"
     echo
-    ./miniC_main.out "lex_yacc_$dir/p$i.c"
+    ./miniC.out "lex_yacc_$dir/p$i.c"
     echo "----------------------------------------"
 done
 
@@ -22,6 +22,6 @@ done
 for i in {1..4}; do
     echo "Running semantic_$dir/p$i.c"
     echo
-    ./miniC_main.out "semantic_$dir/p$i.c"
+    ./miniC.out "semantic_$dir/p$i.c"
     echo "----------------------------------------"
 done

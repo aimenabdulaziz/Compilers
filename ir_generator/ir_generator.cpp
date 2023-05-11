@@ -28,11 +28,13 @@
 #include "ast.h"
 #include <unordered_map>
 #include <string>
+#include <vector>
+#include <set>
 
 using namespace std;
 
 // Local function prototype
-static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, unordered_map<string, LLVMValueRef> &varMap, LLVMTypeRef intType);
+static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType);
 
 /* This array maps rop_type values to corresponding LLVMIntPredicate values.
  *
@@ -82,7 +84,7 @@ LLVMOpcode opcodes[] = {
  * @param currBlock    Reference to the current basic block
  * @param exitBlock    Reference to the exit basic block
  */
-void emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, unordered_map<string, LLVMValueRef> &varMap, LLVMTypeRef intType, astNode *body, LLVMBasicBlockRef &currBlock, LLVMBasicBlockRef &exitBlock) {
+void emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType, astNode *body, LLVMBasicBlockRef &currBlock, LLVMBasicBlockRef &exitBlock) {
 	if (!body || !currBlock) {
        return;
 	}
@@ -107,7 +109,7 @@ void emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &fun
  * @param intType The LLVM type of an integer.
  * @return The LLVMValueRef of the resulting LLVM IR or nullptr if the node does not generate a value.
  */
-static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, unordered_map<string, LLVMValueRef> &varMap, LLVMTypeRef intType) {
+static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType) {
 	LLVMValueRef result = nullptr;
 	switch(stmt->type) {
 		case ast_call: {
@@ -145,9 +147,16 @@ static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &modu
         }
         case ast_block: {
             // Handle 'block' statement
+			// create a new symbol table currSymTable and push it to symbol table stack
+			unordered_map<string, LLVMValueRef> currSymTable;
+			varMap.push_back(currSymTable);
+
             for (auto &node : *stmt->block.stmt_list) {
                 traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
             }
+			
+			// pop the symbol table from the stack
+			varMap.pop_back();
             break;
         }
 		case ast_while: {
@@ -254,15 +263,33 @@ static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &modu
 		case ast_asgn: {
 			// Generate LLVM IR code for the assignment statement
 			LLVMValueRef rhsValue = traverseASTAndGenerateIR(stmt->asgn.rhs, module, builder, func, varMap, intType);
-			LLVMValueRef varPtr = varMap[stmt->asgn.lhs->var.name];
+			
+			// Search the pointer to the variable from the symbol table starting from the top of the stack
+			LLVMValueRef varPtr;
+			for (int i = varMap.size() - 1; i >= 0; i--) {
+				if (varMap[i].find(stmt->asgn.lhs->var.name) != varMap[i].end()) {
+					varPtr = varMap[i][stmt->asgn.lhs->var.name];
+					break;
+				}
+			}
+	
 			LLVMBuildStore(builder, rhsValue, varPtr);
 			break;
 		}
 		case ast_decl: {
 			// Generate LLVM IR code for the declaration statement
+			// Check if the variable has already been declared in the same scope
+			if (varMap.back().find(stmt->decl.name) != varMap.back().end()) {
+				printf("Error: Variable '%s' already declared in the same scope\n", stmt->decl.name);
+				exit(1);
+			}
+
+			// Create an alloca instruction and set the alignment to 4 bytes
 			LLVMValueRef var = LLVMBuildAlloca(builder, intType, stmt->decl.name);
 			LLVMSetAlignment(var, 4);
-			varMap[stmt->decl.name] = var;
+
+			// Add the variable to the symbol table at the top of the stack
+			varMap.back()[stmt->decl.name] = var;
 			break;
 		}
 		default: {
@@ -284,7 +311,7 @@ static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &modu
  * @param intType   The LLVM integer type used in the generated code.
  * @return          Returns the LLVM value for the given AST node or nullptr if the node does not generate a value.
  */
-static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, unordered_map<string, LLVMValueRef> &varMap, LLVMTypeRef intType) {
+static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType) {
     LLVMValueRef result = nullptr;
 	switch(node->type) {
         case ast_prog: {
@@ -324,19 +351,25 @@ static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &modul
 			// Create a builder to generate instructions with.
 			LLVMPositionBuilderAtEnd(builder, entryBlock);
 
-			// Create a variable for the func parameter and store it in the entry block
-			LLVMValueRef var = LLVMBuildAlloca(builder, intType, node->func.param->var.name);
-			LLVMSetAlignment(var, 4);
-			LLVMBuildStore(builder, LLVMGetParam(func, 0), var);
+			// create a new symbol table currSymTable and push it to symbol table stack
+			unordered_map<string, LLVMValueRef> currSymTable;
+			varMap.push_back(currSymTable);
 
-			// Add the variable to the variable map
-			varMap[node->func.param->var.name] = var;
+			if (node->func.param) {
+				// Create a variable for the func parameter and store it in the entry block
+				LLVMValueRef var = LLVMBuildAlloca(builder, intType, node->func.param->var.name);
+				LLVMSetAlignment(var, 4);
+				LLVMBuildStore(builder, LLVMGetParam(func, 0), var);
+
+				// Add the variable to the variable map in the top symbol table
+				varMap.back()[node->func.param->var.name] = var;
+			}
 
 			// Traverse the function body
 			traverseASTAndGenerateIR(node->func.body, module, builder, func, varMap, intType);
 			
-			// Clear the variable map for the next function (NOT NECESSARY for MiniC)
-			varMap.clear();
+			// Pop the top of the variable map (MiniC only has one function)
+			varMap.pop_back();
 			
 			break;
 		}
@@ -346,8 +379,13 @@ static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &modul
 			break;
 		}
 		case ast_var: {
-			// Load the value of a variable
-			result = LLVMBuildLoad2(builder, intType, varMap[node->var.name], "");
+			// Load the value of a variable - start check from the top of the symbol table stack
+			for (int i = varMap.size() - 1; i >= 0; i--) {
+				if (varMap[i].find(node->var.name) != varMap[i].end()) {
+					result = LLVMBuildLoad2(builder, intType, varMap[i][node->var.name], "");
+					break;
+				}
+			}
 			break;
 		}
 		case ast_cnst: {
@@ -435,8 +473,8 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
     LLVMTypeRef intType = LLVMInt32Type();
 	LLVMValueRef func;
 
-    // Initialize a map to store the value references of variables
-    std::unordered_map<string, LLVMValueRef> varMap;
+    // Initialize a vector of map to store the value references of variables
+    std::vector<unordered_map<string, LLVMValueRef>> varMap;
 
 	// Traverse the AST to generate LLVM IR code
     traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
@@ -461,7 +499,6 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
 	LLVMDumpModule(module);
 	#endif
 	
-
     // Cleanup
     LLVMDisposeBuilder(builder);
     LLVMDisposeModule(module);
