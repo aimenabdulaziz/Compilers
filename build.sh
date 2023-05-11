@@ -9,11 +9,12 @@
 #
 # This script performs the following tasks:
 # 1. Build the frontend executable with or without debug flag
-# 2. Perform semantic analysis on the MiniC file
-# 3. Exit if the analysis fails
-# 4. Generate LLVM Intermediate Representation (IR) code
-# 5. Build the optimization executable with or without debug flag
-# 6. Optimize the generated IR code
+# 2. Parse the MiniC using Lex and Yacc
+# 3. Perform semantic analysis on the MiniC file
+# 4. Exit if the analysis fails
+# 5. Generate LLVM Intermediate Representation (IR) code (using ir_generator.cpp and clang)
+# 6. Build the optimization executable with or without debug flag
+# 7. Optimize the generated IR code
 #
 # Author: Aimen Abdulaziz
 # Date: Spring, 2023
@@ -31,10 +32,10 @@ else
 fi
 
 # Clean and build the frontend executable
-(cd frontend && make clean && make $debug_flag)
+(cd frontend && make $debug_flag)
 
 # build the AST and run semantic Analysis
-frontend/miniC_main.out $1.c
+frontend/miniC.out $1.c
 
 # if the semantic analysis fails, exit
 if [ $? -ne 0 ]; then
@@ -45,7 +46,11 @@ fi
 clang -S -emit-llvm $1.c -o $1.ll 
 
 # Clean and build the optimization executable
-(cd optimization && make clean && make $debug_flag)
+(cd optimization && make $debug_flag)
 
 # call the optimizer and pass the miniC file and generated IR code 
 optimization/./optimizer $1.ll
+
+# Clean the executables
+(cd frontend && make clean)
+(cd optimization && make clean)

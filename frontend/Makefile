@@ -29,32 +29,57 @@
 SRC = miniC
 TEST_PROG = testing.sh
 IR_GENERATOR = ir_generator
-CXX = g++
-CXXFLAGS = -std=c++20 -Wextra -Wpedantic 
-LLVM_CXXFLAGS = `llvm-config-15 --cxxflags`
+IR_GENERATOR_DIR = ../ir_generator
+INCLUDES = -I $(LLVM) -I $(IR_GENERATOR_DIR) -I .
+CXX = clang++
 LLVM_LDFLAGS = `llvm-config-15 --ldflags --libs core`
 LLVM = /usr/include/llvm-c-15/
+
+ifeq ($(DEBUG), 1)
+	CXXFLAGS = -Wextra -Wpedantic -g -gdwarf-4 -Wno-deprecated $(INCLUDES) -DDEBUG
+else
+	CXXFLAGS = -Wextra -Wpedantic -g -gdwarf-4 -Wno-deprecated $(INCLUDES)
+endif
 
 # Targets
 .PHONY: all test valgrind clean ir_builder
 
+# Main target to build the output binary
 all: $(SRC).out
 
-$(IR_GENERATOR).o: $(IR_GENERATOR).cpp
-	clang++ -g $(LLVM_CXXFLAGS) -I $(LLVM) -x c++ -c $< -o $@
-
-$(SRC).out: $(SRC).l $(SRC).y $(IR_GENERATOR).o
+# Rule for generating y.tab.h and y.tab.c files using yacc
+y.tab.h y.tab.c: $(SRC).y
 	yacc -d -v $(SRC).y
+
+# Rule for generating lex.yy.c file using lex
+lex.yy.c: $(SRC).l 
 	lex $(SRC).l
-	$(CXX) $(CXXFLAGS) -g -o $(SRC).out lex.yy.c y.tab.c ast.c semantic_analysis.c miniC_main.c $(IR_GENERATOR).o $(LLVM_LDFLAGS) -I $(LLVM)
 
+# Rule for building the final output binary
+$(SRC).out: lex.yy.c y.tab.c miniC_main.o $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o ast.o semantic_analysis.o
+	$(CXX) $(CXXFLAGS) $^ $(LLVM_LDFLAGS) -o $@
 
+# Rule for building ast.o object file
+ast.o: ast.cpp
+
+# Rule for building semantic_analysis.o object file
+semantic_analysis.o: semantic_analysis.cpp
+
+# Rule for building miniC_main.o object file
+miniC_main.o: miniC_main.cpp
+
+# Rule for building the IR generator object file
+$(IR_GENERATOR_DIR)/$(IR_GENERATOR).o: $(IR_GENERATOR_DIR)/$(IR_GENERATOR).cpp
+
+# Target for running the test script
 test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)
 	bash -v ./$(TEST_PROG)
 
+# Target for running the compiler with Valgrind
 valgrind: $(SRC).out
 	valgrind --leak-check=full --show-leak-kinds=all ./$(SRC).out lex_yacc_tests/p1.c
 
+# Target for cleaning the build artifacts
 clean:
-	rm -f *~ *.o *.out lex.yy.c y.tab.c y.tab.h y.output ir_builder.o
+	rm -f *~ *.o *.out* lex.yy.c y.tab.c y.tab.h $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o

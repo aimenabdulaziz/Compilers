@@ -56,7 +56,12 @@ int main(int argc, char *argv[]) {
         exitCode = 1;
     } else {
         std::cout << "Result: Semantic analysis successful." << std::endl;
-        generateIRAndSaveToFile(root, argv[1]);
+        if(generateIRAndSaveToFile(root, argv[1])) {
+            std::cout << "Result: IR generation successful." << std::endl;
+        } else {
+            std::cout << "Result: IR generation unsuccessful." << std::endl;
+            exitCode = 1;
+        }
     }
 
     if (yyin != stdin) {

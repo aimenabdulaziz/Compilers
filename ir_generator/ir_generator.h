@@ -14,7 +14,7 @@
 #include <llvm-c/Core.h>
 
 /**
- * Generates LLVM IR code from the given AST and saves it to a file with a '.ll' extension.
+ * Generates LLVM IR code from the given AST and saves it to a file with a '_manual.ll' extension.
  * 
  * @param node      The Abstract Syntax Tree (AST) node to generate LLVM IR code from.
  * @param filename  The input filename, used as the basis for the output file's name.

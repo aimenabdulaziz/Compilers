@@ -13,7 +13,7 @@
  *
  * Usage: Include "ir_generator.h" in your project and use the provided functions to generate LLVM IR from a miniC AST.
  *
- * Output: The program generates an output file named 'basename.ll', where 'basename' is derived from the input file,
+ * Output: The program generates an output file named 'basename_manual.ll', where 'basename' is derived from the input file,
  *         in the same directory as the input file, containing the LLVM IR code generated for the given miniC program.
  *
  * Author: Aimen Abdulaziz
@@ -67,7 +67,7 @@ LLVMOpcode opcodes[] = {
     LLVMSub,     // sub
     LLVMUDiv,    // divide
     LLVMMul,     // mul
-    LLVMFNeg,     // uminus
+    LLVMFNeg,    // uminus
 };
 
 /**
@@ -393,34 +393,30 @@ static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &modul
 
 
 /**
- * @brief Change the file extension of a given filename.
- * 
- * This function takes an input filename and changes its extension to ".ll".
- * The modified filename is written into the provided output buffer.
- * 
- * @param filename The input filename (null-terminated string).
- * @param output The output buffer to store the modified filename (null-terminated string).
+ * @brief Changes the file extension of the given filename.
+ *
+ * This function takes the input filename and changes its extension to ".ll".
+ * The modified filename is stored in the output parameter.
+ *
+ * @param[in] filename The input filename as a C-style string (const char*).
+ * @param[out] output The modified filename with the new extension as a reference to a std::string.
  */
-static void changeFileExtension(const char* filename, char* output) {
-    // Copy the input filename to the output buffer
-    strcpy(output, filename);
-    
-    // Find the last dot in the output string, which indicates the start of the current file extension
-    char* dotPos = strrchr(output, '.');
-    
-    // If a dot is found in the output string
-    if (dotPos) {
-        // Replace the dot with a null-terminator, effectively truncating the string
-        // and removing the current file extension
-        *dotPos = '\0';
-    }
-    
-    // Append the .ll extension to the output string
-    strcat(output, ".ll");
+static void changeFileExtension(const char *filename, string &output) {
+	// Convert the input C-style string filename to a C++ std::string
+    std::string inputFilename(filename);
+
+	// Find the position of the last dot in the filename, which represents the start of the file extension
+    size_t dotPos = inputFilename.find_last_of('.');
+
+	// Remove the file extension by taking the substring up to the dot position.
+    output = inputFilename.substr(0, dotPos);
+
+	// Append the new file extension ".ll" to the output filename
+    output += "_manual.ll";
 }
 
 /**
- * Generates LLVM IR code from the given AST and saves it to a file with a '.ll' extension.
+ * Generates LLVM IR code from the given AST and saves it to a file with a '_manual.ll' extension.
  * 
  * @param node      The Abstract Syntax Tree (AST) node to generate LLVM IR code from.
  * @param filename  The input filename, used as the basis for the output file's name.
@@ -432,7 +428,7 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
         return nullptr;
     }
 
-    // Create LLVM module, builder, and int primitive type
+    // Create LLVM module, builder, int primitive type, and function
     LLVMModuleRef module = LLVMModuleCreateWithName(filename);
     LLVMSetTarget(module, "x86_64-pc-linux-gnu");
     LLVMBuilderRef builder = LLVMCreateBuilder();
@@ -440,7 +436,7 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
 	LLVMValueRef func;
 
     // Initialize a map to store the value references of variables
-    unordered_map<string, LLVMValueRef> varMap;
+    std::unordered_map<string, LLVMValueRef> varMap;
 
 	// Traverse the AST to generate LLVM IR code
     traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
@@ -451,14 +447,20 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
         return nullptr;
     }
 
-    // Create a buffer to store the output filename with the '.ll' extension
-    char outputFilename[strlen(filename) + 1];
+    // Create a string to store the output filename
+   	std::string outputFilename;
 
     // Call the changeFileExtension function and save the result in outputFilename
     changeFileExtension(filename, outputFilename);
 
     // Write the generated LLVM IR code to a file called outputFilename
-    LLVMPrintModuleToFile(module, outputFilename, nullptr); 
+    LLVMPrintModuleToFile(module, outputFilename.c_str(), nullptr);
+
+	#ifdef DEBUG
+	// Print the generated LLVM IR code to the console
+	LLVMDumpModule(module);
+	#endif
+	
 
     // Cleanup
     LLVMDisposeBuilder(builder);
