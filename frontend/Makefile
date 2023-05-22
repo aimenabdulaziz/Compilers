@@ -30,7 +30,9 @@ SRC = miniC
 TEST_PROG = testing.sh
 IR_GENERATOR = ir_generator
 IR_GENERATOR_DIR = ../ir_generator
-INCLUDES = -I $(LLVM) -I $(IR_GENERATOR_DIR) -I .
+C = ../common
+LLIBS = $(C)/common.a
+INCLUDES = -I $(LLVM) -I $(IR_GENERATOR_DIR) -I . -I $(C)
 CXX = clang++
 LLVM_LDFLAGS = `llvm-config-15 --ldflags --libs core`
 LLVM = /usr/include/llvm-c-15/
@@ -56,7 +58,7 @@ lex.yy.c: $(SRC).l
 	lex $(SRC).l
 
 # Rule for building the final output binary
-$(SRC).out: lex.yy.c y.tab.c miniC_main.o $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o ast.o semantic_analysis.o
+$(SRC).out: lex.yy.c y.tab.c miniC_main.o $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o ast.o semantic_analysis.o $(LLIBS)
 	$(CXX) $(CXXFLAGS) $^ $(LLVM_LDFLAGS) -o $@
 
 # Rule for building ast.o object file

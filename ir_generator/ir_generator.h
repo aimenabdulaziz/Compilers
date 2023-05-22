@@ -1,8 +1,13 @@
 /*
- * MiniC Compiler - LLVM IR Builder Header
+ * ir_builder.h - LLVM Intermediate Representation (IR) Builder Header
  *
- **************** ADD DOCUMENTATION HERE *******************
+ * This header file provides the interface for generating LLVM IR code from an Abstract Syntax Tree (AST) node.
  * 
+ * Usage: Include "ir_generator.h" in your project and use the provided functions to generate LLVM IR from a miniC AST.
+ *
+ * Output: The program generates an output file named 'basename_manual.ll', where 'basename' is derived from the input file,
+ *         in the same directory as the input file, containing the LLVM IR code generated for the given miniC program.
+ *
  * Author: Aimen Abdulaziz
  * Date: Spring 2023
  */

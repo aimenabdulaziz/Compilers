@@ -21,19 +21,24 @@
 # Date: Spring 2023
 
 OPTIMIZER = optimizer
+C = ../common
+LLIBS = $(C)/common.a
+LLVM = /usr/include/llvm-c-15/
+INCLUDES = -I $(LLVM) -I $(C)
+
 
 # Uncomment the following line to enable debugging
 # DEBUG = 1
 
 ifeq ($(DEBUG), 1)
-    CXXFLAGS = -g -DDEBUG
+    CXXFLAGS = -g -DDEBUG $(INCLUDES)
 else
-    CXXFLAGS = -g
+    CXXFLAGS = -g $(INCLUDES)
 endif
 
-$(OPTIMIZER): $(OPTIMIZER).cpp
-	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags` -I /usr/include/llvm-c-15/ -x c++ -c $(OPTIMIZER).cpp
-	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` -I /usr/include/llvm-c-15/ $(OPTIMIZER).o -o $@
+$(OPTIMIZER): $(OPTIMIZER).cpp $(LLIBS)
+	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags ` -x c++ -c $<
+	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` -I /usr/include/llvm-c-15/ $^ -o $@
 
 clean: 
 	rm -rf $(OPTIMIZER)

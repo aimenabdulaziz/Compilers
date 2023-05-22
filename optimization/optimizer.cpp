@@ -16,7 +16,7 @@
  * 		   as the input file
  *
  * Author: Aimen Abdulaziz
- * Date: Spring, 2023
+ * Date: Spring 2023
  */
 
 #include <stdio.h>
@@ -26,6 +26,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/IRReader.h>
 #include <llvm-c/Types.h>
+#include "file_utils.h"
 
 // C++ libraries
 #include <unordered_map>
@@ -347,7 +348,8 @@ static bool constantFolding(LLVMBasicBlockRef basicBlock) {
 	bool codeChanged = false;
 	// Iterate over all the instructions in the basic block
 	for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-		instruction; instruction = LLVMGetNextInstruction(instruction)) {
+		instruction; 
+		instruction = LLVMGetNextInstruction(instruction)) {
 		
 		// If the instruction is an arithmetic operation and all its operands are constants,
 		if (isArithmeticOrIcmpOperation(instruction) && allOperandsAreConstant(instruction)) {
@@ -974,39 +976,6 @@ void optimizeProgram(LLVMModuleRef module) {
 }
 
 /**
- * Create LLVM module from the given filename
- * @param filename Path to the LLVM IR file
- * @return LLVMModuleRef representing the module created from the given file, or NULL if error occurs
- */
-LLVMModuleRef createLLVMModel(char *filename) {
-    char *err = 0;
-
-    LLVMMemoryBufferRef ll_f = 0;
-    LLVMModuleRef m = 0;
-
-    // Read the contents of the file into a memory buffer
-    LLVMCreateMemoryBufferWithContentsOfFile(filename, &ll_f, &err);
-
-    // If there was an error creating the memory buffer, print the error message and return NULL
-    if (err != NULL) { 
-        printf("Error creating memory buffer: %s\n", err);
-        LLVMDisposeMessage(err);
-        return NULL;
-    }
-
-    // Parse the LLVM IR in the memory buffer and create a new module
-	LLVMParseIRInContext(LLVMGetGlobalContext(), ll_f, &m, &err);
-    if (err != NULL) {
-        printf("Error parsing LLVM IR: %s\n", err);
-        LLVMDisposeMessage(err);
-        return NULL;
-    }
-	
-	// Return the LLVM module
-    return m;
-}
-
-/**
  * @brief The main function of the program.
  *
  * This function is the entry point of the program and is called when the program is executed.
@@ -1021,11 +990,10 @@ int main(int argc, char **argv) {
     LLVMModuleRef mod;
 
     // Check if the number of arguments is valid
-    if (argc == 2){
+    if (argc == 2) {
         // Create the LLVM model from the input file
         mod = createLLVMModel(argv[1]);
-    }
-    else{
+    } else {
         mod = NULL;
         printf("Usage: ./optimizer <sample.ll>\n");
         return 1;
@@ -1039,12 +1007,14 @@ int main(int argc, char **argv) {
 		return 2;
     }
 
-    // Writing out the LLVM IR
-    char *filename = argv[1];
-    strcat(argv[1], "_optimized");
+	// Create a string to store the output filename
+   	std::string outputFilename;
+
+	// Append `_opt` to the basename of the input file and save it in outputFilename
+	changeFileExtension(argv[1], outputFilename, "_opt.ll");
 
     // Writes the LLVM IR to a file named "test.ll"
-    LLVMPrintModuleToFile(mod, filename, NULL);
+    LLVMPrintModuleToFile(mod, outputFilename.c_str(), NULL);
 
     return 0;
 }

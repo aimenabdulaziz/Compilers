@@ -31,3 +31,10 @@ make valgrind
 ## Clean Up
 
 To clean up the generated files, run `make clean`. This will remove any compiled output, temporary files, and logs.
+
+## Exit Code
+
+0 - success
+1 - file could not be opened
+2 - semantic analysis failed
+3 - LLVM IR generation failed

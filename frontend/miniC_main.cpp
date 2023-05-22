@@ -53,14 +53,14 @@ int main(int argc, char *argv[]) {
     bool errorFound = semanticAnalysis(root);
     if (errorFound) {
         std::cout << "Result: Semantic analysis unsuccessful." << std::endl;
-        exitCode = 1;
+        exitCode = 2;
     } else {
         std::cout << "Result: Semantic analysis successful." << std::endl;
         if(generateIRAndSaveToFile(root, argv[1])) {
             std::cout << "Result: IR generation successful." << std::endl;
         } else {
             std::cout << "Result: IR generation unsuccessful." << std::endl;
-            exitCode = 1;
+            exitCode = 3;
         }
     }
 

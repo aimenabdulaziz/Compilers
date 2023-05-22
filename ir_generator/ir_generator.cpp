@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include "ast.h"
+#include "file_utils.h"
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -429,30 +430,6 @@ static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &modul
 	return result;
 }
 
-
-/**
- * @brief Changes the file extension of the given filename.
- *
- * This function takes the input filename and changes its extension to ".ll".
- * The modified filename is stored in the output parameter.
- *
- * @param[in] filename The input filename as a C-style string (const char*).
- * @param[out] output The modified filename with the new extension as a reference to a std::string.
- */
-static void changeFileExtension(const char *filename, string &output) {
-	// Convert the input C-style string filename to a C++ std::string
-    std::string inputFilename(filename);
-
-	// Find the position of the last dot in the filename, which represents the start of the file extension
-    size_t dotPos = inputFilename.find_last_of('.');
-
-	// Remove the file extension by taking the substring up to the dot position.
-    output = inputFilename.substr(0, dotPos);
-
-	// Append the new file extension ".ll" to the output filename
-    output += "_manual.ll";
-}
-
 /**
  * Generates LLVM IR code from the given AST and saves it to a file with a '_manual.ll' extension.
  * 
@@ -489,7 +466,7 @@ LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
    	std::string outputFilename;
 
     // Call the changeFileExtension function and save the result in outputFilename
-    changeFileExtension(filename, outputFilename);
+    changeFileExtension(filename, outputFilename, "_manual.ll");
 
     // Write the generated LLVM IR code to a file called outputFilename
     LLVMPrintModuleToFile(module, outputFilename.c_str(), nullptr);
