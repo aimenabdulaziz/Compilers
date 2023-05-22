@@ -25,6 +25,7 @@ C = ../common
 LLIBS = $(C)/common.a
 LLVM = /usr/include/llvm-c-15/
 INCLUDES = -I $(LLVM) -I $(C)
+TEST_PROG = testing.sh
 
 
 # Uncomment the following line to enable debugging
@@ -40,8 +41,12 @@ $(OPTIMIZER): $(OPTIMIZER).cpp $(LLIBS)
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags ` -x c++ -c $<
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` -I /usr/include/llvm-c-15/ $^ -o $@
 
+test: $(TEST_PROG) $(OPTIMIZER).out
+	chmod a+x $(TEST_PROG)
+	bash -v ./$(TEST_PROG)
+
 clean: 
 	rm -rf $(OPTIMIZER)
 	rm -rf *.o *.out
 	
-.PHONY: clean
+.PHONY: test clean

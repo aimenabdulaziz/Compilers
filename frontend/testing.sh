@@ -1,11 +1,12 @@
-# MiniC Compiler testing script
+#!/bin/bash
+#
+# MiniC Frontend testing script
 #
 # usage: ./testing.sh or make test (strongly recommended)
 #
 # Author: Aimen Abdulaziz
-# Date: Spring, 2023
-#
-#!/bin/bash
+# Date: Spring 2023
+
 
 # List of files to run
 dir=../tests
