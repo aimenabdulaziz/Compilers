@@ -1,10 +1,13 @@
 #include "register_allocation.h"
 
-static void populateInstructionIndex(LLVMBasicBlockRef basicBlock, vector<LLVMValueRef> &instructionIndex)
+static void
+computeLiveness(LLVMBasicBlockRef basicBlock,
+                LiveRange &liveUsages,
+                InstIndex &instructionList)
 {
     LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
 
-    while (instruction != NULL)
+    while (instruction)
     {
         // Skip alloca instructions
         if (LLVMIsAAllocaInst(instruction))
@@ -13,87 +16,85 @@ static void populateInstructionIndex(LLVMBasicBlockRef basicBlock, vector<LLVMVa
             continue;
         }
 
-        // Add the instruction to the index
-        instructionIndex.push_back(instruction);
+        // Check if the instruction generates a value
+        std::unordered_set<LLVMOpcode> noValueOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
+        LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(instruction);
+        if (noValueOpCode.find(instrOpcode) == noValueOpCode.end())
+        {
+            // Add the instruction to the live range of the instructions
+            liveUsages[instruction].push_back(instructionList.size());
+        }
+
+        // Update the live usage of any of the operands in the instruction
+        for (auto i = 0; i < LLVMGetNumOperands(instruction); i++)
+        {
+            LLVMValueRef operand = LLVMGetOperand(instruction, i);
+            if (liveUsages.find(operand) != liveUsages.end())
+            {
+                liveUsages[operand].push_back(instructionList.size());
+            }
+        }
+
+        // Add the instruction to the list
+        instructionList.push_back(instruction);
 
         // Get the next instruction
         instruction = LLVMGetNextInstruction(instruction);
     }
 }
 
-static void computeLiveness(LLVMBasicBlockRef basicBlock,
-                            unordered_map<LLVMValueRef, vector<int>> &liveRange,
-                            vector<LLVMValueRef> &instructionIndex)
+static void
+printInstructionIndexVector(InstIndex &instructionIndex)
 {
+    // print the instruction index vector
     for (auto i = 0; i < instructionIndex.size(); i++)
     {
-        LLVMValueRef instruction = instructionIndex[i];
+        // Print the LLVMValueRef to a string
+        char *instruction = LLVMPrintValueToString(instructionIndex[i]);
+        cout << i << ": " << instruction << endl;
+        LLVMDisposeMessage(instruction);
+    }
+    cout << endl;
+}
 
-        // Get the number of operands of the instruction
-        int numOperands = LLVMGetNumOperands(instruction);
-
-        // Iterate over the operands and add the instruction index to the live range of each operand
-        for (auto j = 0; j < numOperands; j++)
+static void
+printLiveRange(LiveRange &liveRange)
+{
+    // Print the live range of each instruction
+    for (auto usages : liveRange)
+    {
+        // print the vector of all the usages
+        cout << "Live range of";
+        char *instruction = LLVMPrintValueToString(usages.first);
+        cout << instruction << ": ";
+        LLVMDisposeMessage(instruction);
+        for (auto usage : usages.second)
         {
-            // Get the operand
-            LLVMValueRef operand = LLVMGetOperand(instruction, j);
-
-            if (LLVMIsAConstant(operand))
-            {
-                // Skip constants
-                continue;
-            }
-
-            // Add the instruction index to the live range of the operand
-            liveRange[operand].push_back(i);
+            cout << usage << " ";
         }
+        cout << endl;
     }
 }
 
 void allocateRegisterForFunction(LLVMValueRef function)
 {
+    // Create a map to store the register allocated to each instruction
+    unordered_map<LLVMValueRef, string> allocatedRegisterMap;
+
+    // Get the first basic block
     LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
-    while (basicBlock != NULL)
+    while (basicBlock)
     {
-        // Initialize the set of available registers
-        unordered_set<string> availableRegisters = {"ebx", "ecx", "edx"};
-
         // Create an instruction index for the basic block
-        vector<LLVMValueRef> instructionIndex;
-        populateInstructionIndex(basicBlock, instructionIndex);
+        InstIndex instructionList;
+        LiveRange liveUsages;
+        computeLiveness(basicBlock, liveUsages, instructionList);
 
 #ifdef DEBUG
-        // print the instruction index vector
-        for (auto i = 0; i < instructionIndex.size(); i++)
-        {
-            // Print the LLVMValueRef to a string
-            char *instruction = LLVMPrintValueToString(instructionIndex[i]);
-            cout << i << ": " << instruction << endl;
-            LLVMDisposeMessage(instruction);
-        }
-        cout << endl;
+        printInstructionIndexVector(instructionList);
+        printLiveRange(liveUsages);
 #endif
 
-        // Compute the liveness of each instruction and store it liveRange
-        unordered_map<LLVMValueRef, vector<int>> liveRange;
-        computeLiveness(basicBlock, liveRange, instructionIndex);
-
-#ifdef DEBUG
-        // Print the live range of each instruction
-        for (auto usages : liveRange)
-        {
-            // print the vector of all the usages
-            cout << "Live range of ";
-            char *instruction = LLVMPrintValueToString(usages.first);
-            cout << instruction << ": ";
-            LLVMDisposeMessage(instruction);
-            for (auto usage : usages.second)
-            {
-                cout << usage << " ";
-            }
-            cout << endl;
-        }
-#endif
         // Get the next basic block
         basicBlock = LLVMGetNextBasicBlock(basicBlock);
     }
@@ -102,7 +103,7 @@ void allocateRegisterForFunction(LLVMValueRef function)
 void allocateRegisterForModule(LLVMModuleRef module)
 {
     LLVMValueRef function = LLVMGetFirstFunction(module);
-    while (function != NULL)
+    while (function)
     {
         // Allocate registers for the function
         allocateRegisterForFunction(function);
@@ -126,7 +127,7 @@ int main(int argc, char **argv)
     LLVMModuleRef module = createLLVMModel(argv[1]);
 
     // Check if module is valid
-    if (module == NULL)
+    if (!module)
     {
         cout << "Error: Invalid LLVM IR file" << endl;
         return 2;
