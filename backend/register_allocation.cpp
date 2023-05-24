@@ -16,10 +16,9 @@ computeLiveness(LLVMBasicBlockRef basicBlock,
             continue;
         }
 
-        // Check if the instruction generates a value
-        std::unordered_set<LLVMOpcode> noValueOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
+        // Check if the instruction generates a value (noResultOpCode is defined in register_allocation.h)
         LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(instruction);
-        if (noValueOpCode.find(instrOpcode) == noValueOpCode.end())
+        if (noResultOpCode.find(instrOpcode) == noResultOpCode.end())
         {
             // Add the instruction to the live range of the instructions
             liveUsages[instruction].push_back(instructionList.size());
