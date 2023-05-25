@@ -13,9 +13,8 @@
 using namespace std;
 
 // Type definitions for the register allocation algorithm
-typedef unordered_map<LLVMValueRef, vector<int>> LiveRangeMap;
+typedef std::unordered_map<LLVMValueRef, std::vector<int>> LiveUsageMap;
 typedef std::vector<LLVMValueRef> InstIndex;
-typedef std::unordered_map<LLVMValueRef, std::vector<int>> LiveRange;
 typedef std::unordered_map<LLVMValueRef, int> RegMap;
 
 // Enumeration of available registers
@@ -24,15 +23,21 @@ enum Register
     EBX,
     ECX,
     EDX,
-    NUM_REGISTERS
+    NUM_REGISTERS,
+    SPILL
 };
 
 // Set of available registers
 typedef std::unordered_set<Register> RegisterSet;
-RegisterSet availableRegisters = {EBX, ECX, EDX};
+
+// Map of allocated registers
+typedef std::unordered_map<LLVMValueRef, Register> AllocatedReg;
 
 // Set of opcodes that do not have a result value (LHS)
 std::unordered_set<LLVMOpcode> noResultOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
+
+// Set of arithmetic opcodes
+std::unordered_set<LLVMOpcode> arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
 
 // Function declarations
 void allocateRegisterForModule(LLVMModuleRef module);
