@@ -1,5 +1,46 @@
+/*
+ * register_allocation.cpp
+ *
+ * This file implements register allocation for LLVM IR code using the linear scan algorithm.
+ *
+ * The register allocation algorithm performs the following steps:
+ * 1. Computes liveness information for each basic block in the function.
+ * 2. Allocates registers for each basic block using the linear scan algorithm.
+ * 3. If no registers are available, selects an instruction to spill based on the live usage frequency of the instruction.
+ *
+ * Usage: ./register_allocation <filename.ll>
+ *
+ * Output: The LLVM IR code with registers allocated is printed to stdout.
+ *
+ * Author: Aimen Abdulaziz
+ * Date: Spring 2023
+ */
+
 #include "register_allocation.h"
 
+/**
+ * Determines whether the given LLVM instruction opcode produces a result (or a LHS).
+ * Instructions that do not produce a result are LLVMStore, LLVMBr, LLVMCall, and LLVMRet.
+ * Instructions that do not have a LHS are not considered for register allocation.
+ *
+ * @param instrOpcode The LLVM instruction opcode to check.
+ * @return True if the instruction has a result, false otherwise.
+ */
+static bool hasResult(LLVMOpcode instrOpcode)
+{
+    return noResultOpCode.find(instrOpcode) == noResultOpCode.end();
+}
+
+/**
+ * Computes liveness information for a given LLVM basic block.
+ * Liveness information is useful for register allocation: it determines where each value is live,
+ * starting from its definition up to its last usage. This information is used for deciding
+ * when a register can be safely reused.
+ *
+ * @param basicBlock       The LLVM basic block for which to compute liveness.
+ * @param liveUsageMap     An empty map which will be populated with LLVM value to a vector of its use points (represented by instruction indices).
+ * @param instructionList  An empty list which will be populated with all non-alloca instructions in the current basic block.
+ */
 static void
 computeLiveness(LLVMBasicBlockRef basicBlock,
                 LiveUsageMap &liveUsageMap,
@@ -9,18 +50,17 @@ computeLiveness(LLVMBasicBlockRef basicBlock,
 
     while (instruction)
     {
-        // Skip alloca instructions
+        // Alloca instructions are ignored for the purpose of liveness analysis
         if (LLVMIsAAllocaInst(instruction))
         {
             instruction = LLVMGetNextInstruction(instruction);
             continue;
         }
 
-        // Check if the instruction does NOT generate result (noResultOpCode is defined in register_allocation.h)
+        // If instruction generates a result, add its index to the live range
         LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(instruction);
-        if (noResultOpCode.find(instrOpcode) == noResultOpCode.end())
+        if (hasResult(instrOpcode))
         {
-            // Add the instruction to the live range of the instructions
             liveUsageMap[instruction].push_back(instructionList.size());
         }
 
@@ -28,20 +68,25 @@ computeLiveness(LLVMBasicBlockRef basicBlock,
         for (auto i = 0; i < LLVMGetNumOperands(instruction); i++)
         {
             LLVMValueRef operand = LLVMGetOperand(instruction, i);
-            if (liveUsageMap.find(operand) != liveUsageMap.end())
+            if (liveUsageMap.count(operand) > 0)
             {
                 liveUsageMap[operand].push_back(instructionList.size());
             }
         }
 
-        // Add the instruction to the list
+        // Append the instruction to the instruction list
         instructionList.push_back(instruction);
 
-        // Get the next instruction
+        // Proceed to the next instruction in the basic block
         instruction = LLVMGetNextInstruction(instruction);
     }
 }
 
+/**
+ * Prints the instruction index vector to the console for debugging purpose.
+ *
+ * @param instructionIndex The instruction index vector to print.
+ */
 static void
 printInstructionIndexVector(InstIndex &instructionIndex)
 {
@@ -56,73 +101,11 @@ printInstructionIndexVector(InstIndex &instructionIndex)
     cout << endl;
 }
 
-static void
-removeAllocatedRegister(int instructionIdx,
-                        int operandStartIdx,
-                        LLVMValueRef instruction,
-                        LiveUsageMap &liveUsageMap,
-                        InstIndex &instructionIndex,
-                        AllocatedReg &bbAllocatedRegisterMap,
-                        RegisterSet &availableRegisters)
-{
-    // Get the number of operands of the instruction
-    int numOperands = LLVMGetNumOperands(instruction);
-
-    // Iterate over each operand of the instruction
-    for (int i = operandStartIdx; i < numOperands; i++)
-    {
-        // Get the i-th operand of the instruction
-        LLVMValueRef operand = LLVMGetOperand(instruction, i);
-
-        // Skip constants and operands that are not in the liveUsageMap
-        if (LLVMIsAConstant(operand) || liveUsageMap.find(operand) == liveUsageMap.end())
-        {
-            continue;
-        }
-
-        // Check if the live range of the operand ends after the current instruction
-        if (liveUsageMap[operand].back() > instructionIdx)
-        {
-            // If the live range of the operand does not end, continue to the next operand
-            continue;
-        }
-
-        // Check if the operand has a physical register assigned to it
-        auto it = bbAllocatedRegisterMap.find(operand);
-        if (it == bbAllocatedRegisterMap.end())
-        {
-            // If the operand does not have a physical register assigned to it, continue to the next operand
-            continue;
-        }
-
-        // Get the physical register assigned to the operand
-        Register registerName = it->second;
-
-        // Add the physical register to the set of available registers
-        availableRegisters.insert(registerName);
-    }
-}
-
-static LLVMValueRef
-selectSpillInstr(LiveUsageMap &liveUsageMap,
-                 AllocatedReg &bbAllocatedRegisterMap,
-                 LLVMValueRef currInstr)
-{
-    LLVMValueRef spill_var = nullptr;
-    int min_frequency = INT_MAX;
-    for (auto it = bbAllocatedRegisterMap.begin(); it != bbAllocatedRegisterMap.end(); ++it)
-    {
-        LLVMValueRef instr = it->first;
-        Register registerName = it->second;
-        if (registerName != SPILL && liveUsageMap[instr].size() < min_frequency)
-        {
-            spill_var = instr;
-            min_frequency = liveUsageMap[instr].size();
-        }
-    }
-    return spill_var;
-}
-
+/**
+ * Prints the live range of each instruction in the given LiveUsageMap to the console.
+ *
+ * @param liveUsageMap The LiveUsageMap to print.
+ */
 static void
 printLiveUsageMap(LiveUsageMap &liveUsageMap)
 {
@@ -142,6 +125,67 @@ printLiveUsageMap(LiveUsageMap &liveUsageMap)
     }
 }
 
+/**
+ * @brief Removes the allocated register for the given instruction operand from the basic block allocated register map.
+ *
+ * The function iterates over each operand of the instruction and adds the physical register assigned to the
+ * operand to the set of available registers.
+ * If the operand does not have a physical register assigned to it, the function does nothing.
+ *
+ * @param instructionIdx The index of the current instruction in the instruction list.
+ * @param operandStartIdx The index of the first operand to process.
+ * @param instruction The LLVM instruction to remove the allocated register for.
+ * @param liveUsageMap The LiveUsageMap for the function.
+ * @param instructionIndex The instruction index map for the function.
+ * @param bbAllocatedRegisterMap The allocated register map for the basic block.
+ * @param availableRegisters The set of available registers.
+ */
+static void
+removeAllocatedRegister(int instructionIdx,
+                        int operandStartIdx,
+                        LLVMValueRef instruction,
+                        LiveUsageMap &liveUsageMap,
+                        InstIndex &instructionIndex,
+                        AllocatedReg &bbAllocatedRegisterMap,
+                        RegisterSet &availableRegisters)
+{
+    // Get the number of operands of the instruction
+    const int numOperands = LLVMGetNumOperands(instruction);
+
+    // Iterate over each operand of the instruction
+    for (int i = operandStartIdx; i < numOperands; i++)
+    {
+        // Get the i-th operand of the instruction
+        LLVMValueRef operand = LLVMGetOperand(instruction, i);
+
+        // Skip constants, operands that are not in the liveUsageMap, and operands that are live after the current instruction
+        if (LLVMIsAConstant(operand) || liveUsageMap.count(operand) == 0 || liveUsageMap[operand].back() > instructionIdx)
+        {
+            continue;
+        }
+
+        // Check if the operand has a physical register assigned to it
+        const auto it = bbAllocatedRegisterMap.find(operand);
+        if (it == bbAllocatedRegisterMap.end())
+        {
+            // If the operand does not have a physical register assigned to it, continue to the next operand
+            continue;
+        }
+
+        // Get the physical register assigned to the operand
+        const Register registerName = it->second;
+
+        // Add the physical register to the set of available registers
+        availableRegisters.insert(registerName);
+    }
+}
+
+/**
+ * Returns the name of the given register as a string.
+ *
+ * @param reg The register to get the name of.
+ * @return The name of the register as a string.
+ */
 std::string
 getRegisterName(Register reg)
 {
@@ -160,6 +204,12 @@ getRegisterName(Register reg)
     }
 }
 
+/**
+ * Merges the allocated register map for a basic block with the global allocated register map.
+ *
+ * @param bbAllocatedRegisterMap a reference to the allocated register map for the basic block.
+ * @param allocatedRegisterMap a reference to the global allocated register map.
+ */
 static void
 mergeBBWGlobalMap(AllocatedReg &bbAllocatedRegisterMap,
                   AllocatedReg &allocatedRegisterMap)
@@ -180,6 +230,66 @@ mergeBBWGlobalMap(AllocatedReg &bbAllocatedRegisterMap,
     cout << endl;
 }
 
+/**
+ * Determines whether the given LLVM instruction opcode is an arithmetic operation.
+ * Arithmetic operations for MiniC are LLVMAdd, LLVMSub, and LLVMMul
+ *
+ * @param instrOpcode The LLVM instruction opcode to check.
+ * @return True if the instruction is an arithmetic operation, false otherwise.
+ */
+static bool isArithmetic(LLVMOpcode instrOpcode)
+{
+    return arithmeticOpcode.find(instrOpcode) != arithmeticOpcode.end();
+}
+
+/**
+ * @brief Selects an instruction to spill based on the live usage frequency of its operands.
+ *
+ * The function iterates over each instruction in the basic block and selects the instruction
+ * with the lowest live usage frequency.
+ * The selected instruction is returned as the spill instruction.
+ *
+ * @param liveUsageMap The LiveUsageMap for the function.
+ * @param bbAllocatedRegisterMap The allocated register map for the basic block.
+ * @param currInstr The current instruction being processed.
+ * @return The instruction to spill, or nullptr if no instruction can be spilled.
+ */
+static LLVMValueRef
+selectSpillInstr(LiveUsageMap &liveUsageMap,
+                 AllocatedReg &bbAllocatedRegisterMap,
+                 LLVMValueRef currInstr)
+{
+    LLVMValueRef spillVar = nullptr;
+    int minFrequency = INT_MAX;
+    for (auto it = bbAllocatedRegisterMap.begin(); it != bbAllocatedRegisterMap.end(); ++it)
+    {
+        LLVMValueRef instr = it->first;
+        Register registerName = it->second;
+        if (registerName != SPILL && liveUsageMap[instr].size() < minFrequency)
+        {
+            spillVar = instr;
+            minFrequency = liveUsageMap[instr].size();
+        }
+    }
+    return spillVar;
+}
+
+/**
+ * @brief This function implements the linear scan register allocation algorithm.
+ *
+ * Allocates registers for the given LLVM basic block using the linear scan algorithm.
+ * The function creates an AllocatedReg map to store the register allocated to each instruction in the basic block.
+ * It then iterates over each instruction in the basic block and allocates registers for each instruction.
+ * The allocated registers are stored in the AllocatedReg map.
+ * The function also removes allocated registers for operands whose live range ends in the current instruction.
+ * If no registers are available, the function selects an instruction to spill and spills it.
+ * The function then merges the basic block allocated register map into the global allocated register map.
+ *
+ * @param basicBlock The LLVM basic block to allocate registers for.
+ * @param instructionList The list of instructions in the basic block.
+ * @param liveUsageMap The LiveUsageMap for the function.
+ * @param allocatedRegisterMap The global allocated register map.
+ */
 static void
 allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
                               InstIndex &instructionList,
@@ -196,7 +306,7 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
         LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(currInstr);
 
         // Check if the instruction does NOT generates a result (no LHS)
-        if (noResultOpCode.find(instrOpcode) != noResultOpCode.end())
+        if (!hasResult(instrOpcode))
         {
             // Check and remove allocated registers for each operand whose live range ends in the current instruction
             removeAllocatedRegister(i, 0, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);
@@ -204,14 +314,14 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
         }
 
         // Check if the instruction is an arithmetic instruction
-        if (arithmeticOpcode.find(instrOpcode) != arithmeticOpcode.end())
+        if (isArithmetic(instrOpcode))
         {
             // Get the first operand of the instruction
             LLVMValueRef firstOperand = LLVMGetOperand(currInstr, 0);
 
-            // Check if the first operand has a physical register assigned to it in reg_map
-            // And the liveness range of the first operand ends at the instruction
-            if (bbAllocatedRegisterMap.find(firstOperand) != bbAllocatedRegisterMap.end() && liveUsageMap[firstOperand].back() == i)
+            // If the first operand has a physical register assigned to it in and its liveness range ends at
+            // the current instruction, assign the same register to the instruction.
+            if (bbAllocatedRegisterMap.count(firstOperand) > 0 && liveUsageMap[firstOperand].back() == i)
             {
                 // Get the physical register assigned to the first operand
                 Register reg = bbAllocatedRegisterMap[firstOperand];
@@ -224,11 +334,10 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
             continue;
         }
 
-        // Allocate a register to the instruction if there is an available register
+        // If registers are available, allocate one to the current instruction
         if (!availableRegisters.empty())
         {
             Register registerName = *availableRegisters.begin();
-            // cout << "Allocating " << registerName << " to ";
             availableRegisters.erase(registerName);
             bbAllocatedRegisterMap[currInstr] = registerName;
             removeAllocatedRegister(i, 0, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);
@@ -238,19 +347,16 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
         // If there is no available register, find the instr to spill
         LLVMValueRef spillInstr = selectSpillInstr(liveUsageMap, bbAllocatedRegisterMap, currInstr);
 
-        // Spill the curr instr if the spill instr has more uses than the curr instr
+        // If no registers are available, select an instruction to spill
         if (liveUsageMap[spillInstr].size() > liveUsageMap[currInstr].size())
         {
-            // Spill curr instr
             bbAllocatedRegisterMap[currInstr] = SPILL;
             continue;
         }
         else
         {
-            // Get the register allocated to spillInstr
+            // If the current instruction has more uses, spill the selected instruction
             Register spilledRegisterName = bbAllocatedRegisterMap[spillInstr];
-
-            // Allocate the register to curr instr and update the register for spillInstr to "SPILL"
             bbAllocatedRegisterMap[currInstr] = spilledRegisterName;
             bbAllocatedRegisterMap[spillInstr] = SPILL;
         }
@@ -262,6 +368,14 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
     mergeBBWGlobalMap(bbAllocatedRegisterMap, allocatedRegisterMap);
 }
 
+/**
+ * Allocates registers for the given LLVM function using the linear scan algorithm.
+ * The function creates an AllocatedReg map to store the register allocated to each instruction.
+ * It then iterates over each basic block in the function and allocates registers for each basic block.
+ * The allocated registers are stored in the AllocatedReg map.
+ *
+ * @param function The LLVM function to allocate registers for.
+ */
 void allocateRegisterForFunction(LLVMValueRef function)
 {
     // Create a map to store the register allocated to each instruction
@@ -289,6 +403,11 @@ void allocateRegisterForFunction(LLVMValueRef function)
     }
 }
 
+/**
+ * Allocates registers for all functions in the given LLVM module.
+ *
+ * @param module The LLVM module to allocate registers for.
+ */
 void allocateRegisterForModule(LLVMModuleRef module)
 {
     LLVMValueRef function = LLVMGetFirstFunction(module);
@@ -302,7 +421,18 @@ void allocateRegisterForModule(LLVMModuleRef module)
     }
 }
 
-// main function
+/**
+ * Performs register allocation for an LLVM module specified by a command-line argument.
+ * The program reads an LLVM IR file and creates an LLVM module from it.
+ * It then allocates registers for all functions in the module using the linear scan algorithm.
+ * The allocated registers are stored in an AllocatedReg map.
+ *
+ * Usage: ./register_allocation <filename.ll>
+ *
+ * @param argc The number of command-line arguments.
+ * @param argv An array of command-line argument strings.
+ * @return 0 if the program executed successfully, non-zero otherwise.
+ */
 int main(int argc, char **argv)
 {
     // Check the number of arguments

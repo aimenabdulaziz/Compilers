@@ -1,3 +1,20 @@
+/**
+ * register_allocation.h
+ *
+ * Header file for register allocation algorithm for LLVM IR code using the linear scan algorithm.
+ *
+ * This file defines the data structures and function declarations for the register allocation algorithm.
+ * The algorithm uses the linear scan algorithm to allocate registers for LLVM IR code.
+ * The file includes type definitions for the LiveUsageMap, InstIndex, RegMap, RegisterSet, and AllocatedReg data structures.
+ * It also defines the Register enumeration and sets of opcodes for instructions that do not have a result value and arithmetic opcodes.
+ * The file provides function declarations for allocating registers for a single function and for all functions in a module.
+ *
+ * Usage: #include "register_allocation.h"
+ *
+ * Author: Aimen Abdulaziz
+ * Date: Spring 2023
+ */
+
 #ifndef REGISTER_ALLOCATION_H
 #define REGISTER_ALLOCATION_H
 
@@ -40,7 +57,21 @@ std::unordered_set<LLVMOpcode> noResultOpCode = {LLVMStore, LLVMBr, LLVMCall, LL
 std::unordered_set<LLVMOpcode> arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
 
 // Function declarations
-void allocateRegisterForModule(LLVMModuleRef module);
+/**
+ * Allocates registers for the given LLVM function using the linear scan algorithm.
+ * The function creates an AllocatedReg map to store the register allocated to each instruction.
+ * It then iterates over each basic block in the function and allocates registers for each basic block.
+ * The allocated registers are stored in the AllocatedReg map.
+ *
+ * @param function The LLVM function to allocate registers for.
+ */
 void allocateRegisterForFunction(LLVMValueRef function);
+
+/**
+ * Allocates registers for all functions in the given LLVM module.
+ *
+ * @param module The LLVM module to allocate registers for.
+ */
+void allocateRegisterForModule(LLVMModuleRef module);
 
 #endif // REGISTER_ALLOCATION_H

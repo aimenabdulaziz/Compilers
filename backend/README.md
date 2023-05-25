@@ -1,38 +1,45 @@
-# Initialization
-def getNumberOfUses(v):
+# Register Allocation Module
+This module provides an implementation of register allocation for LLVM IR code using the linear scan algorithm.
 
+## Usage
+To use the register allocation module, include the register_allocation.h header file in your C++ code:
+```bash
+#include "register_allocation.h"
+```
 
-# Initialize empty set of active intervals
-active_intervals = {}
+The module provides two functions for allocating registers:
+```bash
+void allocateRegistersForFunction(LLVMValueRef function);
+void allocateRegistersForModule(LLVMModuleRef module);
+```
 
-for each variable v in order of increasing start point of their live intervals:
-    if len(active_intervals) < num_registers:
-        # Allocate a register to v
-        active_intervals.add(v)
-        continue
+The `allocateRegistersForFunction` function allocates registers for a single function. It takes a LLVMValueRef argument that represents the function to allocate registers for.
 
-    # Find the variable to spill
-    spill_var = select_spill_var(active_intervals)
+The `allocateRegistersForModule` function allocates registers for all functions in a module. It takes a LLVMModuleRef argument that represents the module to allocate registers for.
 
-    if spill_var.live_interval.start < v.live_interval.start:
-        # Spill the variable and allocate a register to v
-        spill(spill_var)
-        active_intervals.remove(spill_var)
-        active_intervals.add(v)
-    else:
-        # Spill v
-        spill(v)
+## Data Structures
 
-def select_spill_var(active_intervals):
-    # Pick the variable with the furthest next use and the lowest spill cost
-    furthest_next_use = -1
-    lowest_spill_cost = float('inf')
-    spill_var = None
+The register allocation module defines several data structures:
 
-    for v in active_intervals:
-        if v.next_use > furthest_next_use or (v.next_use == furthest_next_use and v.spill_cost > lowest_spill_cost):
-            furthest_next_use = v.next_use
-            lowest_spill_cost = v.spill_cost
-            spill_var = v
+#### LiveUsageMap
+The `LiveUsageMap` data structure is a map that stores the live usage information for each instruction in a function. It is used to calculate the live usage frequency of operands.
 
-    return spill_var
+#### InstIndex
+The `InstIndex` data structure is a map that stores the index of each instruction in the function. It is used to calculate the live usage frequency of operands.
+
+#### RegMap
+The `RegMap` data structure is a map that stores the physical register assigned to each virtual register in the function.
+
+#### RegisterSet
+The `RegisterSet` data structure is a set that stores the available physical registers.
+
+#### AllocatedReg
+The `AllocatedReg` data structure is a map that stores the physical register assigned to each instruction operand in a basic block.
+
+## Algorithm
+The register allocation algorithm used in this module is the linear scan algorithm. The algorithm performs the following steps:
+1. Computes liveness information for each basic block in the function.
+2. Allocates registers for each basic block using the linear scan algorithm.
+3. Removes allocated registers for operands whose live range ends in the current instruction.
+4. If no registers are available, selects an instruction to spill based on the live usage frequency of its operands.
+5. Merges the basic block allocated register map into the global allocated register map.
