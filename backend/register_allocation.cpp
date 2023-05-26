@@ -28,6 +28,7 @@
  */
 static bool hasResult(LLVMOpcode instrOpcode)
 {
+    static OpcodeSet noResultOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
     return noResultOpCode.find(instrOpcode) == noResultOpCode.end();
 }
 
@@ -227,7 +228,6 @@ mergeBBWGlobalMap(AllocatedReg &bbAllocatedRegisterMap,
 
         allocatedRegisterMap[instr] = reg;
     }
-    cout << endl;
 }
 
 /**
@@ -239,6 +239,7 @@ mergeBBWGlobalMap(AllocatedReg &bbAllocatedRegisterMap,
  */
 static bool isArithmetic(LLVMOpcode instrOpcode)
 {
+    static OpcodeSet arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
     return arithmeticOpcode.find(instrOpcode) != arithmeticOpcode.end();
 }
 
@@ -376,7 +377,7 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
  *
  * @param function The LLVM function to allocate registers for.
  */
-void allocateRegisterForFunction(LLVMValueRef function)
+AllocatedReg allocateRegisterForFunction(LLVMValueRef function)
 {
     // Create a map to store the register allocated to each instruction
     AllocatedReg allocatedRegisterMap;
@@ -401,59 +402,5 @@ void allocateRegisterForFunction(LLVMValueRef function)
         // Get the next basic block
         basicBlock = LLVMGetNextBasicBlock(basicBlock);
     }
-}
-
-/**
- * Allocates registers for all functions in the given LLVM module.
- *
- * @param module The LLVM module to allocate registers for.
- */
-void allocateRegisterForModule(LLVMModuleRef module)
-{
-    LLVMValueRef function = LLVMGetFirstFunction(module);
-    while (function)
-    {
-        // Allocate registers for the function
-        allocateRegisterForFunction(function);
-
-        // Get the next function
-        function = LLVMGetNextFunction(function);
-    }
-}
-
-/**
- * Performs register allocation for an LLVM module specified by a command-line argument.
- * The program reads an LLVM IR file and creates an LLVM module from it.
- * It then allocates registers for all functions in the module using the linear scan algorithm.
- * The allocated registers are stored in an AllocatedReg map.
- *
- * Usage: ./register_allocation <filename.ll>
- *
- * @param argc The number of command-line arguments.
- * @param argv An array of command-line argument strings.
- * @return 0 if the program executed successfully, non-zero otherwise.
- */
-int main(int argc, char **argv)
-{
-    // Check the number of arguments
-    if (argc != 2)
-    {
-        cout << "Usage: " << argv[0] << " <filename.ll>" << endl;
-        return 1;
-    }
-
-    // Create LLVM module from IR file
-    LLVMModuleRef module = createLLVMModel(argv[1]);
-
-    // Check if module is valid
-    if (!module)
-    {
-        cout << "Error: Invalid LLVM IR file" << endl;
-        return 2;
-    }
-
-    // Perform register allocation
-    allocateRegisterForModule(module);
-
-    return 0;
+    return allocatedRegisterMap;
 }

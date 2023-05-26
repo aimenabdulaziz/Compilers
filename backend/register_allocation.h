@@ -29,10 +29,11 @@
 
 using namespace std;
 
-// Type definitions for the register allocation algorithm
+// Type definitions for data structures used in the register allocation
 typedef std::unordered_map<LLVMValueRef, std::vector<int>> LiveUsageMap;
 typedef std::vector<LLVMValueRef> InstIndex;
 typedef std::unordered_map<LLVMValueRef, int> RegMap;
+typedef std::unordered_set<LLVMOpcode> OpcodeSet;
 
 // Enumeration of available registers
 enum Register
@@ -50,12 +51,6 @@ typedef std::unordered_set<Register> RegisterSet;
 // Map of allocated registers
 typedef std::unordered_map<LLVMValueRef, Register> AllocatedReg;
 
-// Set of opcodes that do not have a result value (LHS)
-std::unordered_set<LLVMOpcode> noResultOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
-
-// Set of arithmetic opcodes
-std::unordered_set<LLVMOpcode> arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
-
 // Function declarations
 /**
  * Allocates registers for the given LLVM function using the linear scan algorithm.
@@ -64,14 +59,8 @@ std::unordered_set<LLVMOpcode> arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
  * The allocated registers are stored in the AllocatedReg map.
  *
  * @param function The LLVM function to allocate registers for.
+ * @return The AllocatedReg map containing the register allocated to each instruction.
  */
-void allocateRegisterForFunction(LLVMValueRef function);
-
-/**
- * Allocates registers for all functions in the given LLVM module.
- *
- * @param module The LLVM module to allocate registers for.
- */
-void allocateRegisterForModule(LLVMModuleRef module);
+AllocatedReg allocateRegisterForFunction(LLVMValueRef function);
 
 #endif // REGISTER_ALLOCATION_H
