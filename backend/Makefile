@@ -1,4 +1,4 @@
-SRC = register_allocation
+SRC = codegen
 C = ../common
 LLIBS = $(C)/common.a
 LLVM = /usr/include/llvm-c-15/
@@ -14,7 +14,7 @@ else
     CXXFLAGS = -g $(INCLUDES)
 endif
 
-$(SRC): $(SRC).cpp $(LLIBS)
+$(SRC): $(SRC).cpp $(LLIBS) register_allocation.o
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags ` -x c++ -c $<
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` $^ -o $@
 
