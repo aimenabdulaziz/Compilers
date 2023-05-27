@@ -290,8 +290,10 @@ selectSpillInstr(LiveUsageMap &liveUsageMap,
  * @param instructionList The list of instructions in the basic block.
  * @param liveUsageMap The LiveUsageMap for the function.
  * @param allocatedRegisterMap The global allocated register map.
+ *
+ * @ret
  */
-static void
+static bool
 allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
                               InstIndex &instructionList,
                               LiveUsageMap &liveUsageMap,
@@ -300,6 +302,7 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
     // Create a map of instruction to register for the current basic block
     AllocatedReg bbAllocatedRegisterMap;
     RegisterSet availableRegisters = {EBX, ECX, EDX};
+    bool usedEBX = false;
 
     for (int i = 0; i < instructionList.size(); i++)
     {
@@ -329,10 +332,11 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
 
                 // Add the reg to the curr instr
                 bbAllocatedRegisterMap[currInstr] = reg;
+
+                // Remove the allocated register for the second operand if its live range ends in the current instruction
+                removeAllocatedRegister(i, 1, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);
+                continue;
             }
-            // If so, we try to remove the allocated register for the first operand
-            removeAllocatedRegister(i, 1, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);
-            continue;
         }
 
         // If registers are available, allocate one to the current instruction
@@ -342,6 +346,11 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
             availableRegisters.erase(registerName);
             bbAllocatedRegisterMap[currInstr] = registerName;
             removeAllocatedRegister(i, 0, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);
+
+            if (registerName == EBX)
+            {
+                usedEBX = true;
+            }
             continue;
         }
 
@@ -367,6 +376,8 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
 
     // Merge the basic block allocated register map into the global allocated register map
     mergeBBWGlobalMap(bbAllocatedRegisterMap, allocatedRegisterMap);
+
+    return usedEBX;
 }
 
 /**
@@ -376,8 +387,10 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
  * The allocated registers are stored in the AllocatedReg map.
  *
  * @param function The LLVM function to allocate registers for.
+ * @param usedEBX A flag to indicate if the EBX register is used in the function.
+ * @return The AllocatedReg map that stores the register allocated to each instruction.
  */
-AllocatedReg allocateRegisterForFunction(LLVMValueRef function)
+AllocatedReg allocateRegisterForFunction(LLVMValueRef function, bool &usedEBX)
 {
     // Create a map to store the register allocated to each instruction
     AllocatedReg allocatedRegisterMap;
@@ -397,7 +410,10 @@ AllocatedReg allocateRegisterForFunction(LLVMValueRef function)
 #endif
 
         // Allocate register on a basic block level
-        allocateRegisterForBasicBlock(basicBlock, instructionList, liveUsageMap, allocatedRegisterMap);
+        bool basicBlockUsedEBX = allocateRegisterForBasicBlock(basicBlock, instructionList, liveUsageMap, allocatedRegisterMap);
+
+        // Set the usedEBX flag to true if the EBX register is used in the basic block
+        usedEBX = usedEBX || basicBlockUsedEBX;
 
         // Get the next basic block
         basicBlock = LLVMGetNextBasicBlock(basicBlock);

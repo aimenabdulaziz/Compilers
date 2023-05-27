@@ -59,8 +59,9 @@ typedef std::unordered_map<LLVMValueRef, Register> AllocatedReg;
  * The allocated registers are stored in the AllocatedReg map.
  *
  * @param function The LLVM function to allocate registers for.
- * @return The AllocatedReg map containing the register allocated to each instruction.
+ * @param usedEBX A flag to indicate if the EBX register is used in the function.
+ * @return The AllocatedReg map that stores the register allocated to each instruction.
  */
-AllocatedReg allocateRegisterForFunction(LLVMValueRef function);
+AllocatedReg allocateRegisterForFunction(LLVMValueRef function, bool &usedEBX);
 
 #endif // REGISTER_ALLOCATION_H
