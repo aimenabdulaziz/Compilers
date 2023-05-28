@@ -2,12 +2,14 @@
 
 #include "codegen.h"
 
-static void createBBLabel(LLVMBasicBlockRef &basicBlock, BasicBlockLabelMap &bbLabelMap)
+static void
+createBBLabel(LLVMBasicBlockRef &basicBlock, BasicBlockLabelMap &bbLabelMap)
 {
     bbLabelMap[LLVMBasicBlockAsValue(basicBlock)] = ".L" + std::to_string(bbLabelMap.size());
 }
 
-std::ofstream openOutputFile(const char *filename)
+std::ofstream
+openOutputFile(const char *filename)
 {
     // Save the output to a file with the same name as the input file but with a .s extension
     std::string outName;
@@ -22,14 +24,16 @@ std::ofstream openOutputFile(const char *filename)
     return outputFile;
 }
 
-static void printTopLevelDirective(std::ostream &out, const std::string &filename)
+static void
+printTopLevelDirective(std::ostream &out, const std::string &filename)
 {
     out << "\t.file "                             // Output the .file directive
         << "\"" << filename << "\"" << std::endl; // Specify the name of the source file
     out << "\t.text" << std::endl;
 }
 
-static void printFuncDirectives(std::ostream &out, const std::string functionName, bool &usedEBX, const int &funCounter, const int &localMem)
+static void
+printFunctionDirectives(std::ostream &out, const std::string functionName, bool &usedEBX, const int &funCounter, const int &localMem)
 {
     out << "\t.globl " << functionName << std::endl;                 // Specify that the function is global
     out << "\t.type " << functionName << ", @function" << std::endl; // Specify the type of the function
@@ -54,18 +58,21 @@ static void printFuncDirectives(std::ostream &out, const std::string functionNam
     out << "\tsubl $" << localMem << ", %esp\n";
 }
 
-static void printFunctionEnd(std::ostream &out, std::string functionName, const int &funCounter)
+static void
+printFunctionEnd(std::ostream &out)
 {
     out << "\tleave\n"; // Restore the stack frame
     out << "\tret\n";   // Return from the function
 }
 
-static bool isAlloca(LLVMValueRef instruction)
+static bool
+isAlloca(LLVMValueRef instruction)
 {
     return LLVMGetInstructionOpcode(instruction) == LLVMAlloca;
 }
 
-static bool isSpilledInstruction(LLVMValueRef instruction, AllocatedReg &allocatedRegMap)
+static bool
+isSpilledInstruction(LLVMValueRef instruction, AllocatedReg &allocatedRegMap)
 {
     if (allocatedRegMap.find(instruction) != allocatedRegMap.end())
     {
@@ -77,13 +84,15 @@ static bool isSpilledInstruction(LLVMValueRef instruction, AllocatedReg &allocat
     return false;
 }
 
-static void throwError(LLVMValueRef ptr, std::string message)
+static void
+throwError(LLVMValueRef ptr, std::string message)
 {
     char *instr = LLVMPrintValueToString(ptr);
     std::cout << "Unhandled " << message << ". Value: " << instr << std::endl;
     LLVMDisposeMessage(instr);
 }
-static bool isParameter(LLVMValueRef instruction)
+static bool
+isParameter(LLVMValueRef instruction)
 {
     // Iterate through all uses of the instruction
     for (LLVMUseRef use = LLVMGetFirstUse(instruction); use != NULL; use = LLVMGetNextUse(use))
@@ -105,8 +114,9 @@ static bool isParameter(LLVMValueRef instruction)
     return false;
 }
 
-static void populateOffsetMap(LLVMBasicBlockRef basicBlock, AllocatedReg &allocatedRegMap,
-                              bool &usedEBX, OffsetMap &offsetMap, int &localMem)
+static void
+populateOffsetMap(LLVMBasicBlockRef basicBlock, AllocatedReg &allocatedRegMap,
+                  bool &usedEBX, OffsetMap &offsetMap, int &localMem)
 {
     // Get the first instruction in the basic block
     LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
@@ -139,7 +149,8 @@ static void populateOffsetMap(LLVMBasicBlockRef basicBlock, AllocatedReg &alloca
     }
 }
 
-static void printOffsetMap(OffsetMap &offsetMap)
+static void
+printOffsetMap(OffsetMap &offsetMap)
 {
     for (auto &entry : offsetMap)
     {
@@ -149,24 +160,28 @@ static void printOffsetMap(OffsetMap &offsetMap)
     }
 }
 
-static bool variableIsInRegister(CodeGenContext &context, LLVMValueRef value)
+static bool
+variableIsInRegister(CodeGenContext &context, LLVMValueRef value)
 {
     return (context.allocatedRegMap.count(value) > 0 && context.allocatedRegMap[value] != SPILL);
 }
 
-static bool variableIsInMemory(CodeGenContext &context, LLVMValueRef value)
+static bool
+variableIsInMemory(CodeGenContext &context, LLVMValueRef value)
 {
     return (context.offsetMap.count(value) > 0);
 }
 
-static void printLLVMValueRef(LLVMValueRef value, std::ostream &out)
+static void
+printLLVMValueRef(LLVMValueRef value, std::ostream &out)
 {
     char *instr = LLVMPrintValueToString(value);
     out << instr << "\n";
     LLVMDisposeMessage(instr);
 }
 
-std::string getAssemblyOpcodeForPredicate(LLVMIntPredicate predicate)
+static std::string
+getAssemblyOpcodeForPredicate(LLVMIntPredicate predicate)
 {
     switch (predicate)
     {
@@ -183,14 +198,47 @@ std::string getAssemblyOpcodeForPredicate(LLVMIntPredicate predicate)
     case LLVMIntSLE:
         return "jle";
     default:
+    {
         cout << "Unsupported comparison predicate\n";
         return nullptr;
+    }
+    }
+}
+
+static std::string
+getAssemblyOpcodeForInstruction(LLVMValueRef instruction)
+{
+    LLVMOpcode opcode = LLVMGetInstructionOpcode(instruction);
+    switch (opcode)
+    {
+    case LLVMAdd:
+        return "addl";
+    case LLVMSub:
+        return "subl";
+    case LLVMMul:
+        return "imull";
+    case LLVMICmp:
+        return "cmpl";
+    default:
+    {
+        cout << "Unsupported opcode\n";
+        return nullptr;
+    }
     }
 }
 static void
 generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &context)
 {
-    std::ostream &out = context.outputFile;
+    static std::ostream &out = context.outputFile;
+
+    // Emit basic block label
+    std::string label = context.bbLabelMap[LLVMBasicBlockAsValue(basicBlock)];
+    if (label != ".L0")
+    {
+        out << label << ":\n";
+    }
+
+    // Iterate through all instructions in the basic block
     LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
     while (instruction)
     {
@@ -302,7 +350,6 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
                 // MiniC always has one parameter
                 LLVMValueRef param = LLVMGetOperand(instruction, 0);
 
-                printf("param: %s\n", LLVMPrintValueToString(param));
                 // Check if param is a constant
                 if (LLVMIsAConstant(param))
                 {
@@ -334,7 +381,7 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
             if (numParams > 0)
             {
                 // Undo the offset of pushing the parameter of func
-                out << "\taddl $" << 4 * numParams << ", %esp\n";
+                out << "\taddl $" << 4 << ", %esp\n";
             }
 
             // Pop the registers
@@ -394,7 +441,7 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
         }
         case LLVMAlloca:
         {
-            // Code to handle the LLVMAlloca opcode
+            // Do nothing
             break;
         }
         case LLVMAdd:
@@ -403,6 +450,61 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
         case LLVMICmp:
         {
             // Code to handle the LLVMAdd, LLVMSub, LLVMMul, and LLVMICmp opcodes
+            Register operationReg;
+
+            if (variableIsInRegister(context, instruction))
+            {
+                operationReg = context.allocatedRegMap[instruction];
+            }
+            else
+            {
+                operationReg = EAX;
+            }
+
+            // If the first operand is a constant, move it to eax
+            LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
+            if (LLVMIsAConstant(operand1))
+            {
+                int value = LLVMConstIntGetSExtValue(operand1);
+                out << "\tmovl $" << value << ", %eax\n";
+            }
+            else if (variableIsInRegister(context, operand1))
+            {
+                Register reg = context.allocatedRegMap[operand1];
+
+                if (getRegisterName(reg) != getRegisterName(operationReg))
+                {
+                    out << "\tmovl %" << getRegisterName(reg) << ", %" << getRegisterName(operationReg) << "\n";
+                }
+            }
+            else if (variableIsInMemory(context, operand1))
+            {
+                int offset = context.offsetMap[operand1];
+                out << "\tmovl " << offset << "(%ebp), %" << getRegisterName(operationReg) << "\n";
+            }
+
+            LLVMValueRef operand2 = LLVMGetOperand(instruction, 1);
+            if (LLVMIsAConstant(operand2))
+            {
+                int value = LLVMConstIntGetSExtValue(operand2);
+                out << "\t" << getAssemblyOpcodeForInstruction(instruction) << " $" << value << ", %" << getRegisterName(operationReg) << "\n";
+            }
+            else if (variableIsInRegister(context, operand2))
+            {
+                Register reg = context.allocatedRegMap[operand2];
+                out << "\t" << getAssemblyOpcodeForInstruction(instruction) << " %" << getRegisterName(reg) << ", %" << getRegisterName(operationReg) << "\n";
+            }
+            else if (variableIsInMemory(context, operand2))
+            {
+                int offset = context.offsetMap[operand2];
+                out << "\t" << getAssemblyOpcodeForInstruction(instruction) << " " << offset << "(%ebp), %" << getRegisterName(operationReg) << "\n";
+            }
+
+            if (variableIsInMemory(context, operand1))
+            {
+                int offset = context.offsetMap[operand1];
+                out << "\tmovl %" << getRegisterName(operationReg) << ", " << offset << "(%ebp)\n";
+            }
             break;
         }
         default:
@@ -422,7 +524,7 @@ generateAssemblyForBasicBlocks(CodeGenContext &context)
 
     if (basicBlock)
     {
-        printFuncDirectives(context.outputFile, LLVMGetValueName(context.function), context.usedEBX, context.funCounter, context.localMem);
+        printFunctionDirectives(context.outputFile, LLVMGetValueName(context.function), context.usedEBX, context.funCounter, context.localMem);
     }
 
     // Iterate through the basic blocks in the function
@@ -434,6 +536,8 @@ generateAssemblyForBasicBlocks(CodeGenContext &context)
         // Get the next basic block
         basicBlock = LLVMGetNextBasicBlock(basicBlock);
     }
+
+    printFunctionEnd(context.outputFile);
 }
 static void
 generateAssemblyForFunction(LLVMValueRef function, AllocatedReg &allocatedRegMap, std::ofstream &outputFile, bool &usedEBX, const int &funCounter)

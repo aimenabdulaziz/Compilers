@@ -198,6 +198,8 @@ getRegisterName(Register reg)
 {
     switch (reg)
     {
+    case EAX:
+        return "eax";
     case EBX:
         return "ebx";
     case ECX:

@@ -38,6 +38,7 @@ typedef std::unordered_set<LLVMOpcode> OpcodeSet;
 // Enumeration of available registers
 enum Register
 {
+    EAX,
     EBX,
     ECX,
     EDX,
