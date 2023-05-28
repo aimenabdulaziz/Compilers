@@ -4,7 +4,7 @@
 
 static void createBBLabel(LLVMBasicBlockRef &basicBlock, BasicBlockLabelMap &bbLabelMap)
 {
-    bbLabelMap[basicBlock] = "bb" + std::to_string(bbLabelMap.size());
+    bbLabelMap[LLVMBasicBlockAsValue(basicBlock)] = ".L" + std::to_string(bbLabelMap.size());
 }
 
 std::ofstream openOutputFile(const char *filename)
@@ -166,6 +166,27 @@ static void printLLVMValueRef(LLVMValueRef value, std::ostream &out)
     LLVMDisposeMessage(instr);
 }
 
+std::string getAssemblyOpcodeForPredicate(LLVMIntPredicate predicate)
+{
+    switch (predicate)
+    {
+    case LLVMIntEQ:
+        return "je";
+    case LLVMIntNE:
+        return "jne";
+    case LLVMIntSGT:
+        return "jg";
+    case LLVMIntSGE:
+        return "jge";
+    case LLVMIntSLT:
+        return "jl";
+    case LLVMIntSLE:
+        return "jle";
+    default:
+        cout << "Unsupported comparison predicate\n";
+        return nullptr;
+    }
+}
 static void
 generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &context)
 {
@@ -348,6 +369,27 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
         case LLVMBr:
         {
             // Code to handle the LLVMBr opcode
+            if (LLVMIsConditional(instruction))
+            {
+                LLVMValueRef condition = LLVMGetOperand(instruction, 0);
+                std::string falseLabel = context.bbLabelMap[LLVMGetOperand(instruction, 1)];
+                std::string trueLabel = context.bbLabelMap[LLVMGetOperand(instruction, 2)];
+
+                // Get the comparison predicate
+                LLVMIntPredicate predicate = LLVMGetICmpPredicate(condition);
+
+                // Get the corresponding assembly opcode
+                std::string jmpInstruction = getAssemblyOpcodeForPredicate(predicate);
+
+                out << "\t" << jmpInstruction << " " << trueLabel << "\n";
+                out << "\tjmp " << falseLabel << "\n";
+            }
+            else
+            {
+                // Get branch label
+                std::string label = context.bbLabelMap[LLVMGetOperand(instruction, 0)];
+                out << "\tjmp " << label << "\n";
+            }
             break;
         }
         case LLVMAlloca:
@@ -365,9 +407,7 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &co
         }
         default:
         {
-            char *instr = LLVMPrintValueToString(instruction);
-            cout << "Unhandled instruction: " << instr << endl;
-            LLVMDisposeMessage(instr);
+            throwError(instruction, "default");
             break;
         }
         }
