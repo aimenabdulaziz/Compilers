@@ -6,7 +6,7 @@
 
 // Type definitions for data structures used in the code generation
 typedef std::unordered_map<LLVMBasicBlockRef, std::string> BasicBlockLabelMap;
-typedef std::unordered_map<LLVMValueRef, int> OffsetMap;
+typedef std::unordered_map<LLVMValueRef, int> OffsetMap; // ptr -> offset value
 
 /**
  * @brief A class that contains the context for code generation.

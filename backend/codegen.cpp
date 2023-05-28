@@ -1,3 +1,5 @@
+// Assumption: MiniC has at most one parameter
+
 #include "codegen.h"
 
 static void createBBLabel(LLVMBasicBlockRef &basicBlock, BasicBlockLabelMap &bbLabelMap)
@@ -75,6 +77,34 @@ static bool isSpilledInstruction(LLVMValueRef instruction, AllocatedReg &allocat
     return false;
 }
 
+static void throwError(LLVMValueRef ptr, std::string message)
+{
+    char *instr = LLVMPrintValueToString(ptr);
+    std::cout << "Unhandled " << message << ". Value: " << instr << std::endl;
+    LLVMDisposeMessage(instr);
+}
+static bool isParameter(LLVMValueRef instruction)
+{
+    // Iterate through all uses of the instruction
+    for (LLVMUseRef use = LLVMGetFirstUse(instruction); use != NULL; use = LLVMGetNextUse(use))
+    {
+        LLVMValueRef user = LLVMGetUser(use);
+
+        // Check if the user is a store instruction
+        if (LLVMIsAStoreInst(user))
+        {
+            LLVMValueRef storedValue = LLVMGetOperand(user, 0);
+
+            // Check if the stored value is an argument
+            if (LLVMIsAArgument(storedValue))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void populateOffsetMap(LLVMBasicBlockRef basicBlock, AllocatedReg &allocatedRegMap,
                               bool &usedEBX, OffsetMap &offsetMap, int &localMem)
 {
@@ -89,11 +119,19 @@ static void populateOffsetMap(LLVMBasicBlockRef basicBlock, AllocatedReg &alloca
         // Add the instruction to the offset map if it is an alloca instruction
         if (isAlloca(instruction) || isSpilledInstruction(instruction, allocatedRegMap))
         {
-            // Increment the local memory offset
-            localMem += offsetStep;
+            if (isParameter(instruction))
+            {
+                // 8 bytes for the return address and first parameter
+                offsetMap[instruction] = offsetStep * 2;
+            }
+            else
+            {
+                // Increment the local memory offset
+                localMem += offsetStep;
 
-            // Add the alloca instruction to the offset map
-            offsetMap[instruction] = localMem;
+                // Add the alloca instruction to the offset map
+                offsetMap[instruction] = -localMem;
+            }
         }
 
         // Get the next instruction
@@ -111,9 +149,27 @@ static void printOffsetMap(OffsetMap &offsetMap)
     }
 }
 
-static void
-generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock)
+static bool variableIsInRegister(CodeGenContext &context, LLVMValueRef value)
 {
+    return (context.allocatedRegMap.count(value) > 0 && context.allocatedRegMap[value] != SPILL);
+}
+
+static bool variableIsInMemory(CodeGenContext &context, LLVMValueRef value)
+{
+    return (context.offsetMap.count(value) > 0);
+}
+
+static void printLLVMValueRef(LLVMValueRef value, std::ostream &out)
+{
+    char *instr = LLVMPrintValueToString(value);
+    out << instr << "\n";
+    LLVMDisposeMessage(instr);
+}
+
+static void
+generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock, CodeGenContext &context)
+{
+    std::ostream &out = context.outputFile;
     LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
     while (instruction)
     {
@@ -123,21 +179,170 @@ generateAssemblyForInstructions(LLVMBasicBlockRef basicBlock)
         case LLVMRet:
         {
             // Code to handle the LLVMRet opcode
+            LLVMValueRef returnValue = LLVMGetOperand(instruction, 0);
+
+            if (LLVMIsAConstantInt(returnValue))
+            {
+                int value = LLVMConstIntGetSExtValue(returnValue);
+                out << "\tmovl $" << value << ", %eax\n";
+            }
+            else if (variableIsInMemory(context, returnValue))
+            {
+                int offset = context.offsetMap[returnValue];
+                out << "\tmovl " << offset << "(%ebp), %eax\n";
+            }
+            else if ((variableIsInRegister(context, returnValue)))
+            {
+                Register reg = context.allocatedRegMap[returnValue];
+                out << "\tmovl %" << getRegisterName(reg) << ", %eax\n";
+            }
+#ifdef DEBUG
+            else
+            {
+                throwError(returnValue, "return");
+            }
+#endif
             break;
         }
         case LLVMLoad:
         {
             // Code to handle the LLVMLoad opcode
+            if (variableIsInRegister(context, instruction))
+            {
+                LLVMValueRef loadValue = LLVMGetOperand(instruction, 0);
+
+                // Load instruction has the same offset as its operand
+                int offset = context.offsetMap[loadValue];
+
+                Register reg = context.allocatedRegMap[instruction];
+
+                out << "\tmovl " << offset << "(%ebp), %" << getRegisterName(reg) << "\n";
+            }
+#ifdef DEBUG
+            else
+            {
+                throwError(instruction, "load");
+            }
+#endif
             break;
         }
         case LLVMStore:
         {
             // Code to handle the LLVMStore opcode
+            LLVMValueRef storedValue = LLVMGetOperand(instruction, 0);
+            LLVMValueRef storeLocation = LLVMGetOperand(instruction, 1);
+
+            if (isParameter(storedValue))
+            {
+                // Do nothing
+            }
+            else if (LLVMIsAConstantInt(storedValue))
+            {
+                int offset = context.offsetMap[storeLocation];
+                int value = LLVMConstIntGetSExtValue(storedValue);
+                out << "\tmovl $" << value << ", " << offset << "(%ebp)\n";
+            }
+            else if (variableIsInRegister(context, storedValue))
+            {
+                Register reg = context.allocatedRegMap[storedValue];
+                int offset = context.offsetMap[storeLocation];
+                out << "\tmovl %" << getRegisterName(reg) << ", " << offset << "(%ebp)\n";
+            }
+            else if (variableIsInMemory(context, storedValue))
+            {
+                int offset1 = context.offsetMap[storedValue];
+                int offset2 = context.offsetMap[storeLocation];
+                out << "\tmovl " << offset1 << "(%ebp), %eax\n";
+                out << "\tmovl %eax, " << offset2 << "(%ebp)\n";
+            }
+#ifdef DEBUG
+            else
+            {
+                throwError(storedValue, "store");
+            }
+#endif
             break;
         }
         case LLVMCall:
         {
             // Code to handle the LLVMCall opcode
+            out << "\tpushl %ebx\n";
+            out << "\tpushl %ecx\n";
+            out << "\tpushl %edx\n";
+
+            // Get the called function
+            LLVMValueRef func = LLVMGetCalledValue(instruction);
+
+            // Get the number of parameters
+            int numParams = LLVMCountParams(func);
+
+            if (numParams > 0)
+            {
+                // MiniC always has one parameter
+                LLVMValueRef param = LLVMGetOperand(instruction, 0);
+
+                printf("param: %s\n", LLVMPrintValueToString(param));
+                // Check if param is a constant
+                if (LLVMIsAConstant(param))
+                {
+                    int value = LLVMConstIntGetSExtValue(param);
+                    out << "pushl $" << value << endl;
+                }
+                else if (variableIsInRegister(context, param))
+                {
+                    Register reg = context.allocatedRegMap[param];
+                    out << "\tpushl %" << getRegisterName(reg) << "\n";
+                }
+                else if (variableIsInMemory(context, param))
+                {
+                    int offset = context.offsetMap[param];
+                    out << "\tpushl " << offset << "(%ebp)\n";
+                }
+#ifdef DEBUG
+                else
+                {
+                    throwError(instruction, "call");
+                }
+#endif
+            }
+
+            // Emit the function invoked by the call instruction
+            const char *funcName = LLVMGetValueName(func);
+            out << "\tcall " << funcName << "@PLT\n";
+
+            if (numParams > 0)
+            {
+                // Undo the offset of pushing the parameter of func
+                out << "\taddl $" << 4 * numParams << ", %esp\n";
+            }
+
+            // Pop the registers
+            out << "\tpopl %edx\n";
+            out << "\tpopl %ecx\n";
+            out << "\tpopl %ebx\n";
+
+            LLVMTypeRef returnType = LLVMTypeOf(instruction);
+
+            if (LLVMGetTypeKind(returnType) == LLVMIntegerTypeKind)
+            {
+                // The function return an integer (read() in MiniC)
+                if (variableIsInRegister(context, instruction))
+                {
+                    Register reg = context.allocatedRegMap[instruction];
+                    out << "\tmovl %eax, %" << getRegisterName(reg) << "\n";
+                }
+                else if (variableIsInMemory(context, instruction))
+                {
+                    int offset = context.offsetMap[instruction];
+                    out << "\tmovl %eax, " << offset << "(%ebp)\n";
+                }
+#ifdef DEBUG
+                else
+                {
+                    throwError(instruction, "call. The variable is not in register or memory");
+                }
+#endif
+            }
             break;
         }
         case LLVMBr:
@@ -184,7 +389,7 @@ generateAssemblyForBasicBlocks(CodeGenContext &context)
     while (basicBlock)
     {
         // Iterate over the instructions and generate assembly
-        generateAssemblyForInstructions(basicBlock);
+        generateAssemblyForInstructions(basicBlock, context);
 
         // Get the next basic block
         basicBlock = LLVMGetNextBasicBlock(basicBlock);
@@ -193,13 +398,19 @@ generateAssemblyForBasicBlocks(CodeGenContext &context)
 static void
 generateAssemblyForFunction(LLVMValueRef function, AllocatedReg &allocatedRegMap, std::ofstream &outputFile, bool &usedEBX, const int &funCounter)
 {
+    LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
+
+    if (!basicBlock)
+    {
+        return;
+    }
+
     // Create data structures to store the basic block labels and the offsets of the local variables
-    BasicBlockLabelMap bbLabelMap;
-    OffsetMap offsetMap;
+    static BasicBlockLabelMap bbLabelMap;
+    static OffsetMap offsetMap;
 
     // Keep track of the number of basic blocks in the function
     int bbCounter = 0;
-    LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(function);
 
     // Keep track of the offset of the local variables
     int localMem = 0;

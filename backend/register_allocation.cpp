@@ -20,15 +20,21 @@
 
 /**
  * Determines whether the given LLVM instruction opcode produces a result (or a LHS).
- * Instructions that do not produce a result are LLVMStore, LLVMBr, LLVMCall, and LLVMRet.
+ * Instructions that do not produce a result are LLVMStore, LLVMBr, LLVMRet and void LLVMCall.
  * Instructions that do not have a LHS are not considered for register allocation.
  *
  * @param instrOpcode The LLVM instruction opcode to check.
  * @return True if the instruction has a result, false otherwise.
  */
-static bool hasResult(LLVMOpcode instrOpcode)
+static bool hasResult(LLVMOpcode instrOpcode, LLVMValueRef instr = nullptr)
 {
-    static OpcodeSet noResultOpCode = {LLVMStore, LLVMBr, LLVMCall, LLVMRet};
+    static OpcodeSet noResultOpCode = {LLVMStore, LLVMBr, LLVMRet};
+    if (instrOpcode == LLVMCall)
+    {
+        // Check if the call instruction has a void return type
+        LLVMTypeRef returnType = LLVMTypeOf(instr);
+        return LLVMGetTypeKind(returnType) != LLVMVoidTypeKind;
+    }
     return noResultOpCode.find(instrOpcode) == noResultOpCode.end();
 }
 
@@ -60,7 +66,7 @@ computeLiveness(LLVMBasicBlockRef basicBlock,
 
         // If instruction generates a result, add its index to the live range
         LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(instruction);
-        if (hasResult(instrOpcode))
+        if (hasResult(instrOpcode, instruction))
         {
             liveUsageMap[instruction].push_back(instructionList.size());
         }
@@ -193,11 +199,11 @@ getRegisterName(Register reg)
     switch (reg)
     {
     case EBX:
-        return "EBX";
+        return "ebx";
     case ECX:
-        return "ECX";
+        return "ecx";
     case EDX:
-        return "EDX";
+        return "edx";
     case SPILL:
         return "SPILL";
     default:
@@ -310,7 +316,7 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
         LLVMOpcode instrOpcode = LLVMGetInstructionOpcode(currInstr);
 
         // Check if the instruction does NOT generates a result (no LHS)
-        if (!hasResult(instrOpcode))
+        if (!hasResult(instrOpcode, currInstr))
         {
             // Check and remove allocated registers for each operand whose live range ends in the current instruction
             removeAllocatedRegister(i, 0, currInstr, liveUsageMap, instructionList, bbAllocatedRegisterMap, availableRegisters);

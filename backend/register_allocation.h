@@ -51,6 +51,15 @@ typedef std::unordered_set<Register> RegisterSet;
 // Map of allocated registers
 typedef std::unordered_map<LLVMValueRef, Register> AllocatedReg;
 
+/**
+ * Returns the name of the given register as a string.
+ *
+ * @param reg The register to get the name of.
+ * @return The name of the register as a string.
+ */
+std::string
+getRegisterName(Register reg);
+
 // Function declarations
 /**
  * Allocates registers for the given LLVM function using the linear scan algorithm.
