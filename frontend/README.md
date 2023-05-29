@@ -36,5 +36,6 @@ To clean up the generated files, run `make clean`. This will remove any compiled
 
 0 - success
 1 - file could not be opened
-2 - semantic analysis failed
+2 - unsuccessful parsing 
+3 - semantic analysis failed
 3 - LLVM IR generation failed
