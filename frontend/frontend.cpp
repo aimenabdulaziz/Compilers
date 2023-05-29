@@ -35,8 +35,6 @@ void cleanup()
         fclose(yyin);
     }
     yylex_destroy();
-
-    freeNode(root);
 }
 
 // The main function for the MiniC compiler. It takes in a file name as an
@@ -75,6 +73,7 @@ int main(int argc, char *argv[])
     {
         cout << "Result: Semantic analysis unsuccessful." << endl;
         cleanup();
+        freeNode(root);
         return 3;
     }
 
@@ -83,6 +82,7 @@ int main(int argc, char *argv[])
     {
         cout << "Result: IR generation unsuccessful." << endl;
         cleanup();
+        freeNode(root);
         return 4;
     }
 
@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
 
     // Clean up
     cleanup();
+    freeNode(root);
     return 0;
 }
 
