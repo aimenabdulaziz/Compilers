@@ -10,9 +10,9 @@ TEST_PROG = testing.sh
 # DEBUG = 1
 
 ifeq ($(DEBUG), 1)
-    CXXFLAGS = -g -DDEBUG $(INCLUDES)
+    CXXFLAGS = -g -DDEBUG -gdwarf-4 $(INCLUDES)
 else
-    CXXFLAGS = -g $(INCLUDES)
+    CXXFLAGS = -g -gdwarf-4 $(INCLUDES)
 endif
 
 $(SRC): $(SRC).cpp $(LLIBS) $(OBJS)
@@ -23,6 +23,11 @@ $(SRC): $(SRC).cpp $(LLIBS) $(OBJS)
 %.o: %.cpp
 	clang++ $(CXXFLAGS) -c $<  -o $@
 
+valgrind: $(SRC)
+	clang -S -emit-llvm ../tests/backend/p1.c -o p1.ll
+	valgrind --leak-check=full --show-leak-kinds=all ./codegen p1.ll
+	rm -f p1.ll
+
 test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)
 	bash -v ./$(TEST_PROG)
@@ -31,4 +36,4 @@ clean:
 	rm -rf $(SRC)
 	rm -rf *.o *.out
 	
-.PHONY: test clean
+.PHONY: valgrind test clean 
