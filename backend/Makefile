@@ -23,7 +23,7 @@ $(SRC): $(SRC).cpp $(LLIBS) $(OBJS)
 %.o: %.cpp
 	clang++ $(CXXFLAGS) -c $<  -o $@
 
-test: $(TEST_PROG) $(OPTIMIZER).out
+test: $(TEST_PROG) $(SRC).out
 	chmod a+x $(TEST_PROG)
 	bash -v ./$(TEST_PROG)
 

@@ -1,13 +1,42 @@
 #!/bin/bash
+#######################################################################
+#
+# This script is designed to test backend programs. It iterates over all 
+# .c test files in a specified directory, excluding those named 'main.c'.
+# For each of these files, it generates LLVM IR code using Clang and then
+# x86 assembly code using a custom 'codegen' executable. It compiles the
+# original C file and the generated assembly code into two separate
+# executables. 
+#
+# If the C file requires input (i.e., it contains a call to 'read()'),
+# it generates a random integer between 1 and 100 and uses this as input
+# for both executables. If the C file does not require input, it simply
+# runs both executables without input.
+#
+# Finally, it compares the output of both executables. If the outputs
+# match, it indicates that the test has passed. If the outputs do not
+# match, it indicates that the test has failed and displays both the
+# expected and actual output.
+#
+# Colors are used in the terminal output to make the pass/fail results
+# more visually distinct. Specifically, green is used for 'passed' messages,
+# and red is used for 'failed' messages.
+#
+# usage: ./testing.sh (make sure ./testing.sh is executable) or use make test
+#
+# Author: Aimen Abdulaziz
+# Date: Spring 2023
 
-# MiniC Backend testing script
-
-# usage: ./testing.sh or make test (strongly recommended)
 # Compile the codegen executable
 make
 
 # Set the directory containing the test files
 dir=../tests/backend
+
+# Define ANSI escape codes for colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
 
 # Loop over each test file in the directory
 for file in `ls "$dir"/*.c | grep -v main.c`; do
@@ -55,13 +84,12 @@ for file in `ls "$dir"/*.c | grep -v main.c`; do
 
     # Compare the output to the expected output
     if [ "$output" != "$expected" ]; then
-        echo "Test failed: "$base""
-        echo "Expected:"
+        echo -e "${RED}Test failed: $base${NC}"
+        echo -e "${RED}Expected:${NC}"
         echo "$expected"
-        echo "Got:"
+        echo -e "${RED}Got:${NC}"
         echo "$output"
     else
-        echo "Test passed: "$base""
-        rm -f "$dir"/"$base".out "$dir"/"$base".s "$dir"/"$base".ll "$dir"/"$base".expected
+        echo -e "${GREEN}Test passed: $base${NC}"
     fi
 done
