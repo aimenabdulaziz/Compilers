@@ -59,6 +59,10 @@ program:
         $$ = createProg($1, $2, $3);
         root = $$;
     }
+    | extern_read extern_print function_definition { 
+        $$ = createProg($2, $1, $3);
+        root = $$;
+    }
     ;
 
 extern_print:
