@@ -17,7 +17,7 @@
 #   - clean: Removes build artifacts
 #
 # Usage:
-#   - make: Build the miniC compiler executable
+#   - make: Build the 'frontend' compiler executable
 #   - make test: Run the test script
 #   - make valgrind: Run the compiler with Valgrind
 #   - make clean: Clean the build artifacts
@@ -26,7 +26,7 @@
 # Date: Spring 2023
 
 # Variables
-SRC = miniC
+SRC = frontend
 TEST_PROG = testing.sh
 IR_GENERATOR = ir_generator
 IR_GENERATOR_DIR = ../ir_generator
@@ -38,7 +38,7 @@ LLVM_LDFLAGS = `llvm-config-15 --ldflags --libs core`
 LLVM = /usr/include/llvm-c-15/
 
 ifeq ($(DEBUG), 1)
-	CXXFLAGS = -g -DDEBUG -Wextra -Wpedantic  -gdwarf-4 -Wno-deprecated $(INCLUDES) 
+	CXXFLAGS = -g -DDEBUG -Wextra -Wpedantic -gdwarf-4 -Wno-deprecated $(INCLUDES) 
 else
 	CXXFLAGS = -g -Wextra -Wpedantic -gdwarf-4 -Wno-deprecated $(INCLUDES)
 endif
@@ -58,7 +58,7 @@ lex.yy.c: $(SRC).l
 	lex $(SRC).l
 
 # Rule for building the final output binary
-$(SRC).out: lex.yy.c y.tab.c miniC_main.o $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o ast.o semantic_analysis.o $(LLIBS)
+$(SRC): lex.yy.c y.tab.c $(SRC).o $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o ast.o semantic_analysis.o $(LLIBS)
 	$(CXX) $(CXXFLAGS) $^ $(LLVM_LDFLAGS) -o $@
 
 # Rule for building ast.o object file
@@ -67,8 +67,8 @@ ast.o: ast.cpp
 # Rule for building semantic_analysis.o object file
 semantic_analysis.o: semantic_analysis.cpp
 
-# Rule for building miniC_main.o object file
-miniC_main.o: miniC_main.cpp
+# Rule for building frontend.o object file
+$(SRC)o: $(SRC).cpp
 
 # Rule for building the IR generator object file
 $(IR_GENERATOR_DIR)/$(IR_GENERATOR).o: $(IR_GENERATOR_DIR)/$(IR_GENERATOR).cpp
