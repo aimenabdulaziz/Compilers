@@ -40,6 +40,12 @@ NC='\033[0m' # No Color
 
 # Loop over each test file in the directory
 for file in `ls "$dir"/*.c | grep -v main.c`; do
+    # Exit if main.c is not found
+    if [ ! -f "$dir"/main.c ]; then
+        echo "main.c not found"
+        exit 1
+    fi
+
     echo "Testing $file"
 
     # Extract the base name of the file without the .c extension
@@ -62,9 +68,9 @@ for file in `ls "$dir"/*.c | grep -v main.c`; do
     clang "$dir"/main.c "$dir"/"$base".s -m32 -o "$dir"/"$base".out
 
     # Check if the test file requires input
-    if grep -q "= read()" "$dir/$base.c"; then
+    if grep -q "= *read *(" "$dir/$base.c"; then
         # Generate a random integer between 1 and 100
-        input=$(shuf -i 1-100 -n 1)
+        input=$(shuf -i 1-1000 -n 1)
 
         echo "Test "$base" with input "$input""
 
@@ -92,4 +98,6 @@ for file in `ls "$dir"/*.c | grep -v main.c`; do
     else
         echo -e "${GREEN}Test passed: $base${NC}"
     fi
+
+    rm -f "$dir"/"$base".ll "$dir"/"$base".s "$dir"/"$base".expected "$dir"/"$base".out
 done
