@@ -1,7 +1,7 @@
 /**
- * register_allocation.h
+ * @file register_allocation.h
  *
- * Header file for register allocation algorithm for LLVM IR code using the linear scan algorithm.
+ * @brief Header file for register allocation algorithm for LLVM IR code using the linear scan algorithm.
  *
  * This file defines the data structures and function declarations for the register allocation algorithm.
  * The algorithm uses the linear scan algorithm to allocate registers for LLVM IR code.
@@ -11,8 +11,8 @@
  *
  * Usage: #include "register_allocation.h"
  *
- * Author: Aimen Abdulaziz
- * Date: Spring 2023
+ * @author Aimen Abdulaziz
+ * @date Spring 2023
  */
 
 #ifndef REGISTER_ALLOCATION_H

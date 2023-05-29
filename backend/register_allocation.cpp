@@ -1,19 +1,25 @@
 /*
- * register_allocation.cpp
+ * @file register_allocation.cpp
  *
- * This file implements register allocation for LLVM IR code using the linear scan algorithm.
+ * @brief This file implements register allocation for LLVM IR code using the linear scan algorithm.
  *
  * The register allocation algorithm performs the following steps:
  * 1. Computes liveness information for each basic block in the function.
  * 2. Allocates registers for each basic block using the linear scan algorithm.
  * 3. If no registers are available, selects an instruction to spill based on the live usage frequency of the instruction.
  *
- * Usage: ./register_allocation <filename.ll>
+ * Usage:
+ *   AllocatedReg allocateRegisterForFunction(LLVMValueRef function, bool &usedEBX);
  *
- * Output: The LLVM IR code with registers allocated is printed to stdout.
+ *   This function takes a valid LLVM function and a boolean variable by reference as input. It returns the LLVM IR code with
+ *   registers allocated and sets the usedEBX variable to true if the function uses the EBX register.
  *
- * Author: Aimen Abdulaziz
- * Date: Spring 2023
+ * Output:
+ *   The allocateRegisterForFunction function returns an std::unordered_map that maps each LLVM value in the function to the
+ *   register that it is allocated to. The function also sets the usedEBX boolean variable to true if the function uses the EBX register.
+ *
+ * @author Aimen Abdulaziz
+ * @date Spring 2023
  */
 
 #include "register_allocation.h"
@@ -26,7 +32,8 @@
  * @param instrOpcode The LLVM instruction opcode to check.
  * @return True if the instruction has a result, false otherwise.
  */
-static bool hasResult(LLVMOpcode instrOpcode, LLVMValueRef instr = nullptr)
+static bool
+hasResult(LLVMOpcode instrOpcode, LLVMValueRef instr = nullptr)
 {
     static OpcodeSet noResultOpCode = {LLVMStore, LLVMBr, LLVMRet};
     if (instrOpcode == LLVMCall)
@@ -245,7 +252,8 @@ mergeBBWGlobalMap(AllocatedReg &bbAllocatedRegisterMap,
  * @param instrOpcode The LLVM instruction opcode to check.
  * @return True if the instruction is an arithmetic operation, false otherwise.
  */
-static bool isArithmetic(LLVMOpcode instrOpcode)
+static bool
+isArithmetic(LLVMOpcode instrOpcode)
 {
     static OpcodeSet arithmeticOpcode = {LLVMAdd, LLVMSub, LLVMMul};
     return arithmeticOpcode.find(instrOpcode) != arithmeticOpcode.end();
@@ -398,7 +406,8 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
  * @param usedEBX A flag to indicate if the EBX register is used in the function.
  * @return The AllocatedReg map that stores the register allocated to each instruction.
  */
-AllocatedReg allocateRegisterForFunction(LLVMValueRef function, bool &usedEBX)
+AllocatedReg
+allocateRegisterForFunction(LLVMValueRef function, bool &usedEBX)
 {
     // Create a map to store the register allocated to each instruction
     AllocatedReg allocatedRegisterMap;
