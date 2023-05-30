@@ -7,42 +7,52 @@ declare void @print(i32)
 declare i32 @read()
 
 define i32 @func(i32 %0) {
-  %i = alloca i32, align 4
-  store i32 %0, ptr %i, align 4
+  %m = alloca i32, align 4
+  store i32 %0, ptr %m, align 4
   %a = alloca i32, align 4
-  %b = alloca i32, align 4
-  br label %2
+  %n = alloca i32, align 4
+  store i32 5, ptr %n, align 4
+  %2 = load i32, ptr %m, align 4
+  %3 = load i32, ptr %n, align 4
+  %4 = icmp slt i32 %2, %3
+  br i1 %4, label %5, label %7
 
-2:                                                ; preds = %14, %1
-  %3 = load i32, ptr %a, align 4
-  %4 = load i32, ptr %i, align 4
-  %5 = icmp slt i32 %3, %4
-  br i1 %5, label %6, label %17
+5:                                                ; preds = %1
+  %6 = load i32, ptr %m, align 4
+  store i32 %6, ptr %a, align 4
+  br label %9
 
-6:                                                ; preds = %2
-  %a1 = alloca i32, align 4
-  br label %7
+7:                                                ; preds = %1
+  %8 = load i32, ptr %n, align 4
+  store i32 %8, ptr %a, align 4
+  br label %9
 
-7:                                                ; preds = %11, %6
-  %8 = load i32, ptr %b, align 4
-  %9 = load i32, ptr %i, align 4
-  %10 = icmp slt i32 %8, %9
-  br i1 %10, label %11, label %14
+9:                                                ; preds = %7, %5
+  br label %10
 
-11:                                               ; preds = %7
-  %b2 = alloca i32, align 4
-  %12 = load i32, ptr %b2, align 4
-  %13 = add i32 %12, 20
-  store i32 %13, ptr %b2, align 4
-  br label %7
+10:                                               ; preds = %21, %9
+  %11 = load i32, ptr %m, align 4
+  %12 = load i32, ptr %n, align 4
+  %13 = icmp slt i32 %11, %12
+  br i1 %13, label %14, label %22
 
-14:                                               ; preds = %7
-  %15 = load i32, ptr %b, align 4
-  %16 = add i32 10, %15
-  store i32 %16, ptr %a1, align 4
-  br label %2
+14:                                               ; preds = %10
+  %15 = load i32, ptr %m, align 4
+  %16 = add i32 %15, 10
+  store i32 %16, ptr %m, align 4
+  %17 = load i32, ptr %m, align 4
+  %18 = icmp slt i32 %17, 30
+  br i1 %18, label %19, label %21
 
-17:                                               ; preds = %2
-  %18 = load i32, ptr %a, align 4
-  ret i32 %18
+19:                                               ; preds = %14
+  %20 = load i32, ptr %m, align 4
+  store i32 %20, ptr %a, align 4
+  br label %21
+
+21:                                               ; preds = %19, %14
+  br label %10
+
+22:                                               ; preds = %10
+  %23 = load i32, ptr %a, align 4
+  ret i32 %23
 }

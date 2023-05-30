@@ -12,7 +12,6 @@ int func(int n)
 	b = n + 5;
 	c = a + b;
 	d = c + n;
-	print(c);
 	n = b + a;
 	return d;
 }

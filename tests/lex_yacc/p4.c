@@ -1,13 +1,16 @@
 extern void print(int);
 extern int read();
 
-int func(int i){
+int func(int i)
+{
 	int a;
 	int b;
-	
-	while (a < i){
+
+	while (a < i)
+	{
 		int a;
 		a = 10 + b;
 		print(b);
 	}
+	return (a + b);
 }

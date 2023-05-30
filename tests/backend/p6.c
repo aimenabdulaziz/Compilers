@@ -6,12 +6,12 @@ int func(int i)
 	int a;
 	int b;
 
-	a = 10;
+	a = 10 + i;
 
-	if (a + i < 100)
+	if (a < 100)
 	{
 		b = a + 100;
-		print(b);
+		a = a + i;
 	}
 	else
 	{
