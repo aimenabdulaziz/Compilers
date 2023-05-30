@@ -33,7 +33,7 @@ test: $(TEST_PROG) $(SRC).out
 	bash -v ./$(TEST_PROG)
 
 clean: 
-	rm -rf $(SRC)
+	rm -rf $(SRC) register_allocation
 	rm -rf *.o *.out
 	
 .PHONY: valgrind test clean 
