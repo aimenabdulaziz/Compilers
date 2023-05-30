@@ -64,3 +64,58 @@ There are two external function declarations, `print` and `read`, that are used 
 - Arithmetic operations are limited to addition (+), subtraction (-), multiplication (*), and division (/). However, assembly code generation doesn't support division.
 - Each arithmetic operation can only have two operands.
 - Comparison operators allowed in `if` and `while` conditions are: greater than (>), less than (<), equals (==), greater than or equals to (>=), less than or equals to (<=). Logical operators (&&, ||, !) are not used. Additionally, comparison between two expressions is not allowed -- comparison should only be between terms.
+
+
+## Repository Organization
+
+The MiniC compiler consists of three major components: `frontend`, `optimization`, and `backend`. The `common` directory contains common modules shared across files. This repository is organized as such:
+
+```bash
+├── backend
+│   ├── codegen.cpp
+│   ├── codegen.h
+│   ├── Makefile
+│   ├── README.md
+│   ├── register_allocation.cpp
+│   ├── register_allocation.h
+│   └── testing.sh
+├── build.sh
+├── common
+│   ├── common.a
+│   ├── file_utils.cpp
+│   ├── file_utils.h
+│   └── Makefile
+├── frontend
+│   ├── ast.cpp
+│   ├── ast.h
+│   ├── ast_test.c
+│   ├── frontend
+│   ├── frontend.cpp
+│   ├── frontend.l
+│   ├── frontend.y
+│   ├── IMPLEMENTATION.md
+│   ├── Makefile
+│   ├── README.md
+│   ├── semantic_analysis.cpp
+│   ├── semantic_analysis.h
+│   └── testing.sh
+├── ir_generator
+│   ├── ir_generator.cpp
+│   ├── ir_generator.h
+│   └── README.md
+├── LICENSE
+├── optimization
+│   ├── Makefile
+│   ├── optimizer.cpp
+│   ├── optimizer.h
+│   ├── README.md
+│   └── testing.sh
+├── README.md
+├── testing.sh              # automated test for the whole compiler
+└── tests                   # each directory below has its own tests
+    ├── backend             
+    ├── ir_generator
+    ├── lex_yacc
+    ├── optimization
+    └── semantic_analysis
+```
