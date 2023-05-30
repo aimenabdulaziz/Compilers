@@ -36,3 +36,31 @@ The script will then:
 - The LLVM IR generator will create a IR Code of the input file and save the output in a file named `basename_manual.ll`, where `basename` is derived from the input file, in the same directory as the input file, containing the LLVM IR code generated for the given miniC program.
 - The optimizer module will process the input LLVM IR code, apply various optimizations, and generate the optimized LLVM IR code is save to a file named `basename_opt.ll` in the same directory as the input file.
 - The backend module writes the generated assembly code to a file with the same name as the input file but with a `.s` extension. If the input file is named `input.ll`, the program writes the assembly code to a file named `input.s`. The `build.sh` script will take care of passing the optimize LLVM IR code to the backend executable.
+
+
+## MiniC Features and Restrictions
+### General
+
+- The MiniC language only supports compiling a single file program, which consists of a single function definition.
+- The function can be named anything other than `main`, `print`, and `read`.
+There are two external function declarations, `print` and `read`, that are used for printing and reading values. No explicit calls to `printf` or `scanf` are allowed.
+- Comments are not allowed in MiniC. Comments will result in parsing error.
+
+### Functions
+
+- Functions can only have a maximum of one parameter.
+- Functions can only return an integer.
+- The only external functions that can be called are `print` and `read`. No system calls are included. It is expected that both of these external functions are imported each MiniC file even if they might not be used.
+
+### Variables
+
+- All variables (local variables and parameters) are integers.
+- Local variables are declared at the beginning of a block.
+- Each variable should be declared separately, in a new line.
+- Variables are initialized after all the variables have been declared. MiniC doesn't support variable declaration and initialization in the same line.
+
+### Operations
+
+- Arithmetic operations are limited to addition (+), subtraction (-), multiplication (*), and division (/). However, assembly code generation doesn't support division.
+- Each arithmetic operation can only have two operands.
+- Comparison operators allowed in `if` and `while` conditions are: greater than (>), less than (<), equals (==), greater than or equals to (>=), less than or equals to (<=). Logical operators (&&, ||, !) are not used. Additionally, comparison between two expressions is not allowed -- comparison should only be between terms.
