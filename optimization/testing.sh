@@ -7,6 +7,7 @@
 # Author: Aimen Abdulaziz
 # Date: Spring 2023
 
+make
 
 # List of files to run
 dir=../tests/optimization

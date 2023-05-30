@@ -39,7 +39,7 @@ endif
 
 $(OPTIMIZER): $(OPTIMIZER).cpp $(LLIBS)
 	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags ` -x c++ -c $<
-	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` -I /usr/include/llvm-c-15/ $^ -o $@
+	clang++ $(CXXFLAGS) `llvm-config-15 --cxxflags --ldflags --libs core` $^ -o $@
 
 test: $(TEST_PROG) $(OPTIMIZER).out
 	chmod a+x $(TEST_PROG)

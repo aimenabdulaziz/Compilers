@@ -7,12 +7,12 @@
  * 1. Constant folding: Replace arithmetic operations with constants of the operands result
  * 2. Dead code elimination: Remove instructions that have no uses and no side effects
  * 3. Common subexpression elimination: Replace multiple identical computations with a single computation
- * 4. Constant propagation: Replace load instructions with constants if all the stores that write to the 
+ * 4. Constant propagation: Replace load instructions with constants if all the stores that write to the
  * 							memory location being read have the same constant value.
- * 
+ *
  * Usage: ./optimizer <input-file>
- * 
- * Output: The optimized LLVM IR code is save to a file named <input-file>_optimized in the same directory 
+ *
+ * Output: The optimized LLVM IR code is save to a file named <basename>_opt.ll in the same directory
  * 		   as the input file
  *
  * Author: Aimen Abdulaziz
@@ -32,6 +32,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <iostream>
 using namespace std;
 
 /**
@@ -41,27 +42,32 @@ using namespace std;
  * @param instruction2 The second instruction.
  * @return True if both instructions have the same operands, false otherwise.
  */
-static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2) {
+static bool
+isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2)
+{
 	int numberOfOperands1 = LLVMGetNumOperands(instruction1);
 	int numberOfOperands2 = LLVMGetNumOperands(instruction2);
 
-	if (numberOfOperands1 != numberOfOperands2) {
+	if (numberOfOperands1 != numberOfOperands2)
+	{
 		return false;
 	}
 
-	for (int i = 0; i < numberOfOperands1; i++) {
+	for (int i = 0; i < numberOfOperands1; i++)
+	{
 		LLVMValueRef operand1 = LLVMGetOperand(instruction1, i);
 		LLVMValueRef operand2 = LLVMGetOperand(instruction2, i);
 
-		#ifdef DEBUG
+#ifdef DEBUG
 		printf("\nInstr1 - operand %d:\n", i);
 		LLVMDumpValue(operand1);
 		printf("\nInstr2 - operand %d:\n", i);
 		LLVMDumpValue(operand2);
-		#endif
+#endif
 
 		// Compare the operands by checking if they have the same value and type
-		if (operand1 != operand2 || LLVMTypeOf(operand1) != LLVMTypeOf(operand2)) {
+		if (operand1 != operand2 || LLVMTypeOf(operand1) != LLVMTypeOf(operand2))
+		{
 			return false;
 		}
 	}
@@ -76,39 +82,44 @@ static bool isSameOperands(LLVMValueRef instruction1, LLVMValueRef instruction2)
  * @param instruction2 the second Load instruction
  * @return true if it is safe to replace, false otherwise
  */
-static bool safeToReplaceLoadInstructions(LLVMValueRef instruction1, LLVMValueRef instruction2) {
-	// Get the pointer operand 
+static bool
+safeToReplaceLoadInstructions(LLVMValueRef instruction1, LLVMValueRef instruction2)
+{
+	// Get the pointer operand
 	LLVMValueRef ptr1 = LLVMGetOperand(instruction1, 0);
 
 	// Iterate over all the instructions between the two Load instructions
 	// and check if any of them are Store instructions that modify the pointer operand
 	LLVMValueRef currentInstr = instruction1;
-	while((currentInstr = LLVMGetNextInstruction(currentInstr)) && (currentInstr != instruction2)) {
-		#ifdef DEBUG
+	while ((currentInstr = LLVMGetNextInstruction(currentInstr)) && (currentInstr != instruction2))
+	{
+#ifdef DEBUG
 		printf("\nCurrent Instruction:\n");
 		LLVMDumpValue(currentInstr);
-		#endif
-		if (LLVMIsAStoreInst(currentInstr)) {
+#endif
+		if (LLVMIsAStoreInst(currentInstr))
+		{
 			// Check if the Store instruction has the same pointer as the operands
 			LLVMValueRef storePtr = LLVMGetOperand(currentInstr, 1);
-			if (storePtr == ptr1) {
-				// the operands has been modified
-				#ifdef DEBUG
+			if (storePtr == ptr1)
+			{
+// the operands has been modified
+#ifdef DEBUG
 				printf("\nPointer has been modified\n");
-				#endif 
+#endif
 				return false;
 			}
 		}
 	}
-	#ifdef DEBUG
+#ifdef DEBUG
 	printf("\nPointer has not been modified\n");
-	#endif
+#endif
 	return true;
 }
 
 /**
  * Determines whether two instructions represent a common subexpression.
- * 
+ *
  * Two instructions are considered a common subexpression if they have the same opcode and
  * operands. If both instructions are not load instructions, they are considered a common
  * subexpression. If one or both instructions are load instructions, they are considered
@@ -118,16 +129,21 @@ static bool safeToReplaceLoadInstructions(LLVMValueRef instruction1, LLVMValueRe
  * @param instruction2 The second instruction.
  * @return true if the instructions represent a common subexpression, false otherwise.
  */
-static bool isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instruction2) {
-	if (isSameOperands(instruction1, instruction2)) {
-		if (!LLVMIsALoadInst(instruction1) && !LLVMIsALoadInst(instruction2)) {
+static bool
+isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instruction2)
+{
+	if (isSameOperands(instruction1, instruction2))
+	{
+		if (!LLVMIsALoadInst(instruction1) && !LLVMIsALoadInst(instruction2))
+		{
 			return true;
-		} else if (safeToReplaceLoadInstructions(instruction1, instruction2)) {
+		}
+		else if (safeToReplaceLoadInstructions(instruction1, instruction2))
+		{
 			return true;
 		}
 	}
 	return false;
-
 }
 
 /**
@@ -136,7 +152,9 @@ static bool isCommonSubexpression(LLVMValueRef instruction1, LLVMValueRef instru
  * @param instruction the instruction to check
  * @return true if the instruction has any uses, false otherwise
  */
-static bool hasUses(LLVMValueRef instruction) {
+static bool
+hasUses(LLVMValueRef instruction)
+{
 	return LLVMGetFirstUse(instruction) != NULL;
 }
 
@@ -152,49 +170,56 @@ static bool hasUses(LLVMValueRef instruction) {
  * @param basicBlock The LLVM basic block to perform common subexpression elimination on.
  * @return true if any common subexpression was eliminated, false otherwise.
  */
-static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
+static bool
+commonSubexpressionElimination(LLVMBasicBlockRef basicBlock)
+{
 	// Create an empty hashmap opcodeMap of vectors of instructions
 	unordered_map<LLVMOpcode, vector<LLVMValueRef>> opcodeMap; // <opcode, vector of instructions>
 	bool subExpressionEliminated = false;
 
 	// Iterate over all the instructions in the basic block
-	for (auto instruction = LLVMGetFirstInstruction(basicBlock); 
-		instruction; 
-		instruction = LLVMGetNextInstruction(instruction)) {
+	for (auto instruction = LLVMGetFirstInstruction(basicBlock);
+		 instruction;
+		 instruction = LLVMGetNextInstruction(instruction))
+	{
 
 		// Get the opcode of the instruction
 		LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
-		
+
 		// Skip alloca or useless instructions
-		if (op == LLVMAlloca) {
+		if (op == LLVMAlloca)
+		{
 			continue;
 		}
 
 		// Check if the instruction is already in the hashmap
-		if (opcodeMap.find(op) == opcodeMap.end()) {
+		if (opcodeMap.find(op) == opcodeMap.end())
+		{
 			// If not, add it to the hashmap and initialize the vector
 			opcodeMap[op] = vector<LLVMValueRef>();
-		} 
+		}
 
-		// Check if the instruction is a common subexpression by iterating over all the 
+		// Check if the instruction is a common subexpression by iterating over all the
 		// previous instructions with the same opcode
-		for (auto prevInstruction : opcodeMap[op]) {
-			if (hasUses(prevInstruction) && isCommonSubexpression(prevInstruction, instruction)) {
+		for (auto prevInstruction : opcodeMap[op])
+		{
+			if (hasUses(prevInstruction) && isCommonSubexpression(prevInstruction, instruction))
+			{
 				// Replace all uses of the instruction with the previous instruction
 				LLVMReplaceAllUsesWith(instruction, prevInstruction);
 				subExpressionEliminated = true;
 
-				#ifdef DEBUG
+#ifdef DEBUG
 				printf("\nReplaced instruction:\n");
 				LLVMDumpValue(instruction);
 				printf("\nwith instruction:\n");
 				LLVMDumpValue(prevInstruction);
-				#endif
+#endif
 
 				break;
 			}
 		}
-		
+
 		opcodeMap[op].push_back(instruction);
 	}
 
@@ -204,14 +229,16 @@ static bool commonSubexpressionElimination(LLVMBasicBlockRef basicBlock) {
 /**
  * @brief Checks if removing the given instruction causes any side effects.
  *
- * This function checks if an LLVM instruction has side effects by determining 
+ * This function checks if an LLVM instruction has side effects by determining
  * if it is a store instruction or a terminator instruction. These checks are enough
  * for miniC, but depending on the programming language, we might need more checks.
  *
  * @param instruction The LLVMValueRef representing the instruction to check for side effects.
  * @return Returns true if removing instruction has side effects, false otherwise.
  */
-static bool hasSideEffects(LLVMValueRef instruction) {
+static bool
+hasSideEffects(LLVMValueRef instruction)
+{
 	return LLVMIsAStoreInst(instruction) || LLVMIsATerminatorInst(instruction) || LLVMIsACallInst(instruction);
 }
 
@@ -223,42 +250,48 @@ static bool hasSideEffects(LLVMValueRef instruction) {
  *
  * @param toDelete The vector that stores the instructions to be deleted.
  */
-void deleteMarkedInstructions(vector<LLVMValueRef> &toDelete) {
-    // Now erase the marked instructions from the basic block
-    for (auto instruction : toDelete) {
-		#ifdef DEBUG
+void deleteMarkedInstructions(vector<LLVMValueRef> &toDelete)
+{
+	// Now erase the marked instructions from the basic block
+	for (auto instruction : toDelete)
+	{
+#ifdef DEBUG
 		printf("\nDeleting instruction:\n");
 		LLVMDumpValue(instruction);
 		printf("\n");
-		#endif
+#endif
 
-        LLVMInstructionEraseFromParent(instruction);
-    }
+		LLVMInstructionEraseFromParent(instruction);
+	}
 }
 
 /**
  * @brief This function performs dead code elimination on a given basic block.
- * 
- * It iterates over all instructions in the basic block, and if an instruction 
- * has no uses and no side effects, it is marked for deletion. Afterwards, all 
+ *
+ * It iterates over all instructions in the basic block, and if an instruction
+ * has no uses and no side effects, it is marked for deletion. Afterwards, all
  * the marked instructions are erased from the basic block.
  *
  * @param basicBlock the basic block on which to perform dead code elimination
  * @return true if any instruction was deleted, false otherwise
  */
-static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
+static bool
+deadCodeElimination(LLVMBasicBlockRef basicBlock)
+{
 	vector<LLVMValueRef> toDelete;
 
-  	// Iterate over all the instructions in the basic block
+	// Iterate over all the instructions in the basic block
 	for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-		instruction; instruction = LLVMGetNextInstruction(instruction)) {
-		
+		 instruction; instruction = LLVMGetNextInstruction(instruction))
+	{
+
 		// If the instruction has no uses and no side effects, mark it for deletion
-		if (!hasUses(instruction) && !hasSideEffects(instruction)) {
-			#ifdef DEBUG
+		if (!hasUses(instruction) && !hasSideEffects(instruction))
+		{
+#ifdef DEBUG
 			printf("\nMarking instruction for deletion:\n");
 			LLVMDumpValue(instruction);
-			#endif
+#endif
 			toDelete.push_back(instruction);
 		}
 	}
@@ -275,7 +308,9 @@ static bool deadCodeElimination(LLVMBasicBlockRef basicBlock) {
  * @param instruction the LLVM instruction to check
  * @return true if the instruction is an arithmetic or an icmp operation, false otherwise
  */
-static bool isArithmeticOrIcmpOperation(LLVMValueRef instruction) {
+static bool
+isArithmeticOrIcmpOperation(LLVMValueRef instruction)
+{
 	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
 	return (op == LLVMAdd || op == LLVMSub || op == LLVMMul || op == LLVMICmp);
 }
@@ -286,21 +321,25 @@ static bool isArithmeticOrIcmpOperation(LLVMValueRef instruction) {
  * @param instruction The LLVM instruction to check.
  * @return True if all operands are constant integers, false otherwise.
  */
-static bool allOperandsAreConstant(LLVMValueRef instruction) {
+static bool
+allOperandsAreConstant(LLVMValueRef instruction)
+{
 	int numberOfOperands = LLVMGetNumOperands(instruction);
 
-	for (int i = 0; i < numberOfOperands; i++){
+	for (int i = 0; i < numberOfOperands; i++)
+	{
 		LLVMValueRef operand = LLVMGetOperand(instruction, i);
-		if (!LLVMIsAConstantInt(operand)) {
+		if (!LLVMIsAConstantInt(operand))
+		{
 			return false;
 		}
 	}
 
-	#ifdef DEBUG
+#ifdef DEBUG
 	printf("\nAll operands for the following instruction are constants:\n");
 	LLVMDumpValue(instruction);
 	printf("\n");
-	#endif
+#endif
 
 	return true;
 }
@@ -311,29 +350,38 @@ static bool allOperandsAreConstant(LLVMValueRef instruction) {
  * @param instruction The instruction to compute the folded constant for.
  * @return The folded constant as a LLVMValueRef, or NULL if the instruction cannot be folded.
  */
-static LLVMValueRef computeFoldedConstant(LLVMValueRef instruction) {
+static LLVMValueRef
+computeFoldedConstant(LLVMValueRef instruction)
+{
 	// miniC always has two operands for arithmetic operations
 	LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
 	LLVMValueRef operand2 = LLVMGetOperand(instruction, 1);
 
-	#ifdef DEBUG
+#ifdef DEBUG
 	printf("Computing constant arithmetic for\n");
 	LLVMDumpValue(instruction);
 	printf("\n");
-	#endif
+#endif
 
 	LLVMOpcode op = LLVMGetInstructionOpcode(instruction);
 
-	if (op == LLVMAdd) {
+	if (op == LLVMAdd)
+	{
 		return LLVMConstAdd(operand1, operand2);
-	} else if (op == LLVMSub) {
+	}
+	else if (op == LLVMSub)
+	{
 		return LLVMConstSub(operand1, operand2);
-	} else if (op == LLVMMul) {
+	}
+	else if (op == LLVMMul)
+	{
 		return LLVMConstMul(operand1, operand2);
-	} else if (op == LLVMICmp) {
+	}
+	else if (op == LLVMICmp)
+	{
 		LLVMIntPredicate predicate = LLVMGetICmpPredicate(instruction);
 		return LLVMConstICmp(predicate, operand1, operand2);
-	} 
+	}
 	return NULL;
 }
 
@@ -344,24 +392,28 @@ static LLVMValueRef computeFoldedConstant(LLVMValueRef instruction) {
  * @param basicBlock the basic block to apply constant folding to.
  * @return true if any constant folding occurred in the basic block, false otherwise.
  */
-static bool constantFolding(LLVMBasicBlockRef basicBlock) {
+static bool
+constantFolding(LLVMBasicBlockRef basicBlock)
+{
 	bool codeChanged = false;
 	// Iterate over all the instructions in the basic block
 	for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-		instruction; 
-		instruction = LLVMGetNextInstruction(instruction)) {
-		
+		 instruction;
+		 instruction = LLVMGetNextInstruction(instruction))
+	{
+
 		// If the instruction is an arithmetic operation and all its operands are constants,
-		if (isArithmeticOrIcmpOperation(instruction) && allOperandsAreConstant(instruction)) {
+		if (isArithmeticOrIcmpOperation(instruction) && allOperandsAreConstant(instruction))
+		{
 			LLVMValueRef foldedConstant = computeFoldedConstant(instruction);
 			LLVMReplaceAllUsesWith(instruction, foldedConstant);
 			codeChanged = true;
 
-			#ifdef DEBUG
+#ifdef DEBUG
 			printf("Folded constant\n");
 			LLVMDumpValue(foldedConstant);
 			printf("\n");
-			#endif
+#endif
 		}
 	}
 	return codeChanged;
@@ -373,25 +425,31 @@ static bool constantFolding(LLVMBasicBlockRef basicBlock) {
  * @return An unordered map of store instructions map, where the key is the memory address being stored
  *         and the value is a vector of all store instructions that write to that memory address.
  */
-static unordered_map<LLVMValueRef, vector<LLVMValueRef>> buildStoreInstructionsMap(LLVMValueRef function) {
+static unordered_map<LLVMValueRef, vector<LLVMValueRef>>
+buildStoreInstructionsMap(LLVMValueRef function)
+{
 	// <ptr for storing, vector of other store instruction that store in the same ptr>
-	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap; 
+	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap;
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 		for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-			instruction; 
-			instruction = LLVMGetNextInstruction(instruction)) {
+			 instruction;
+			 instruction = LLVMGetNextInstruction(instruction))
+		{
 
 			// Skip non-store instructions
-			if (!LLVMIsAStoreInst(instruction)) {
+			if (!LLVMIsAStoreInst(instruction))
+			{
 				continue;
 			}
 
 			LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
 
 			// If the storePtr is not already in storeInstructionsMap, add it with an empty vector
-			if (storeInstructionsMap.find(storePtr) == storeInstructionsMap.end()) {
+			if (storeInstructionsMap.find(storePtr) == storeInstructionsMap.end())
+			{
 				storeInstructionsMap[storePtr] = vector<LLVMValueRef>();
 			}
 
@@ -416,78 +474,91 @@ static unordered_map<LLVMValueRef, vector<LLVMValueRef>> buildStoreInstructionsM
  * @param killSetMap Pointer to the map that will store the kill sets for each basic block.
  * @param genSetMap Pointer to the map that will store the gen sets for each basic block.
  */
-static void buildKillNGenSetMaps(
-    LLVMValueRef function,
-    unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
-    unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &killSetMap,
-    unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &genSetMap) {
+static void
+buildKillNGenSetMaps(
+	LLVMValueRef function,
+	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &killSetMap,
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &genSetMap)
+{
 
-    // Iterate through all basic blocks in the function.
-    for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-         basicBlock;
-         basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+	// Iterate through all basic blocks in the function.
+	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 
-        // Iterate through all instructions in the basic block.
-        for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-             instruction;
-             instruction = LLVMGetNextInstruction(instruction)) {
+		// Iterate through all instructions in the basic block.
+		for (auto instruction = LLVMGetFirstInstruction(basicBlock);
+			 instruction;
+			 instruction = LLVMGetNextInstruction(instruction))
+		{
 
-            // Initialize empty kill and gen sets for basic blocks not already in the maps.
-            if (killSetMap.find(basicBlock) == killSetMap.end()) {
-                killSetMap[basicBlock] = unordered_set<LLVMValueRef>();
-            }
-            if (genSetMap.find(basicBlock) == genSetMap.end()) {
-                genSetMap[basicBlock] = unordered_set<LLVMValueRef>();
-            }
+			// Initialize empty kill and gen sets for basic blocks not already in the maps.
+			if (killSetMap.find(basicBlock) == killSetMap.end())
+			{
+				killSetMap[basicBlock] = unordered_set<LLVMValueRef>();
+			}
+			if (genSetMap.find(basicBlock) == genSetMap.end())
+			{
+				genSetMap[basicBlock] = unordered_set<LLVMValueRef>();
+			}
 
-            // Skip non-store instructions.
-            if (!LLVMIsAStoreInst(instruction)) {
-                continue;
-            }
+			// Skip non-store instructions.
+			if (!LLVMIsAStoreInst(instruction))
+			{
+				continue;
+			}
 
-            LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
+			LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
 
-            // Add the current store instruction to the gen set for the basic block.
-            genSetMap[basicBlock].insert(instruction);
+			// Add the current store instruction to the gen set for the basic block.
+			genSetMap[basicBlock].insert(instruction);
 
-            // Iterate over the vector of store instructions that modify the same pointer.
-            for (auto storedInstr : storeInstructionsMap[storePtr]) {
+			// Iterate over the vector of store instructions that modify the same pointer.
+			for (auto storedInstr : storeInstructionsMap[storePtr])
+			{
 
-                // Add instructions to the kill set if they are different from the current instruction.
-                if (storedInstr != instruction) {
-                    killSetMap[basicBlock].insert(storedInstr);
-                }
+				// Add instructions to the kill set if they are different from the current instruction.
+				if (storedInstr != instruction)
+				{
+					killSetMap[basicBlock].insert(storedInstr);
+				}
 
-                // If there is any instruction killed by adding the current instruction, remove it from the GEN set.
-                if (genSetMap[basicBlock].find(storedInstr) != genSetMap[basicBlock].end() && storedInstr != instruction) {
-                    genSetMap[basicBlock].erase(storedInstr);
+				// If there is any instruction killed by adding the current instruction, remove it from the GEN set.
+				if (genSetMap[basicBlock].find(storedInstr) != genSetMap[basicBlock].end() && storedInstr != instruction)
+				{
+					genSetMap[basicBlock].erase(storedInstr);
 
-                    #ifdef DEBUG
-                    printf("\nRemoved instruction from GEN set:\n");
-                    LLVMDumpValue(storedInstr);
-                    printf("\n was killed by instruction:\n");
-                    LLVMDumpValue(instruction);
-                    printf("\n");
-                    #endif
-                }
-            }
-        }
-    }
+#ifdef DEBUG
+					printf("\nRemoved instruction from GEN set:\n");
+					LLVMDumpValue(storedInstr);
+					printf("\n was killed by instruction:\n");
+					LLVMDumpValue(instruction);
+					printf("\n");
+#endif
+				}
+			}
+		}
+	}
 }
 
 /**
  * Builds a map of all the predecessors of each basic block in a given function.
- * 
+ *
  * @param function LLVMValueRef for the function to build the predecessor map for
- * @return unordered_map of LLVMBasicBlockRef to vector of LLVMBasicBlockRef, 
+ * @return unordered_map of LLVMBasicBlockRef to vector of LLVMBasicBlockRef,
  *         where the vector contains all predecessors of a basic block
  */
-static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(LLVMValueRef function) {
+static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>>
+buildPredMap(LLVMValueRef function)
+{
 	// Initialize the predecessor map
 	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap;
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-         basicBlock;
-         basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 
 		LLVMValueRef bbTerminator = LLVMGetBasicBlockTerminator(basicBlock);
 
@@ -495,7 +566,8 @@ static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
 		unsigned numSuccessors = LLVMGetNumSuccessors(bbTerminator);
 
 		// Iterate over all the successors of the basic block
-		for (auto i = 0; i < numSuccessors; i++) {
+		for (auto i = 0; i < numSuccessors; i++)
+		{
 			LLVMBasicBlockRef successor = LLVMGetSuccessor(bbTerminator, i);
 
 			// Add the successor to the predecessor map
@@ -503,44 +575,48 @@ static unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> buildPredMap(
 		}
 	}
 
-	// Print the predecessor map
-	#ifdef DEBUG
+// Print the predecessor map
+#ifdef DEBUG
 	printf("\nPredecessor map:\n");
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 		printf("\nBasic Block:\n");
 		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
 		printf("\nPredecessors:\n");
-		for (auto predBlock : predMap[basicBlock]) {
+		for (auto predBlock : predMap[basicBlock])
+		{
 			LLVMDumpValue(LLVMBasicBlockAsValue(predBlock));
 			printf("\n");
 		}
 	}
-	#endif
+#endif
 
 	return predMap;
 }
 
 /**
- * Given a basic block B, the map of predecessors to B, and the OUT sets of all basic blocks, 
+ * Given a basic block B, the map of predecessors to B, and the OUT sets of all basic blocks,
  * this function returns the union of all predecessors' OUT sets.
- * 
+ *
  * @param basicBlock: The basic block whose predecessors' OUT sets are to be unioned
  * @param predMap: The map of predecessors to basicBlock
  * @param outSetMap: The map of basic block to its OUT set
  * @return The union of all predecessors' OUT sets
  */
-static unordered_set<LLVMValueRef> findUnionOfAllPredOuts(
-	LLVMBasicBlockRef basicBlock, 
-	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap,
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap) {
+static unordered_set<LLVMValueRef>
+findUnionOfAllPredOuts(LLVMBasicBlockRef basicBlock,
+					   unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap,
+					   unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap)
+{
 
 	// Initialize the union of all predecessors' OUT sets
 	unordered_set<LLVMValueRef> unionOfAllPredOuts;
 
 	// Iterate over all the predecessors of the basic block
-	for (auto predBlock : predMap[basicBlock]) {
+	for (auto predBlock : predMap[basicBlock])
+	{
 		// Find the OUT set for the predecessor
 		unordered_set<LLVMValueRef> predOutSet = outSetMap[predBlock];
 
@@ -565,22 +641,26 @@ static unordered_set<LLVMValueRef> findUnionOfAllPredOuts(
  *
  * @return The union of IN and GEN sets for the given basic block.
  */
-static unordered_set<LLVMValueRef> findUnionOfInAndGen(
-	LLVMBasicBlockRef basicBlock, 
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap,
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> killSetMap, 
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap) {
-	
+static unordered_set<LLVMValueRef>
+findUnionOfInAndGen(LLVMBasicBlockRef basicBlock,
+					unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap,
+					unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> killSetMap,
+					unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap)
+{
+
 	// If IN[B] is empty, return GEN[B]
-	if (inSetMap[basicBlock].empty()) {
+	if (inSetMap[basicBlock].empty())
+	{
 		return genSetMap[basicBlock];
 	}
 
 	// Find (IN[B] - KILL[B])
 	unordered_set<LLVMValueRef> result;
-	for (auto instruction : inSetMap[basicBlock]) {
+	for (auto instruction : inSetMap[basicBlock])
+	{
 		// Only add instruction NOT present in KILL[B]
-		if (killSetMap[basicBlock].find(instruction) == killSetMap[basicBlock].end()) {
+		if (killSetMap[basicBlock].find(instruction) == killSetMap[basicBlock].end())
+		{
 			result.insert(instruction);
 		}
 	}
@@ -598,22 +678,27 @@ static unordered_set<LLVMValueRef> findUnionOfInAndGen(
  * @param outSetMap The OUT set map for each basic block.
  * @param inSetMap The IN set map for each basic block.
  */
-static void printOutNInMaps(LLVMValueRef function, 
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap,
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap) {
-		
+static void
+printOutNInMaps(LLVMValueRef function,
+				unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> outSetMap,
+				unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap)
+{
+
 	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-		basicBlock;
-		basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 		fprintf(stderr, "\nBasic Block:\n");
 		LLVMDumpValue(LLVMBasicBlockAsValue(basicBlock));
-		fprintf(stderr,"\nIN set:\n");
-		for (auto instruction : inSetMap[basicBlock]) {
+		fprintf(stderr, "\nIN set:\n");
+		for (auto instruction : inSetMap[basicBlock])
+		{
 			LLVMDumpValue(instruction);
 			printf("\n");
 		}
 		fprintf(stderr, "\nOUT set:\n");
-		for (auto instruction : outSetMap[basicBlock]) {
+		for (auto instruction : outSetMap[basicBlock])
+		{
 			LLVMDumpValue(instruction);
 			fprintf(stderr, "\n");
 		}
@@ -640,133 +725,144 @@ static void buildInNOutSets(
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &killSetMap,
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &genSetMap,
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &inSetMap,
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &outSetMap) {
+	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> &outSetMap)
+{
+	// Initialize the IN and OUT sets for each basic block
+	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
+
 		// Initialize the IN and OUT sets for each basic block
-    for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-         basicBlock;
-         basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
+		outSetMap[basicBlock] = genSetMap[basicBlock];
+	}
 
-        // Initialize the IN and OUT sets for each basic block
-        inSetMap[basicBlock] = unordered_set<LLVMValueRef>();
-        outSetMap[basicBlock] = genSetMap[basicBlock];
-    }
+	// IN and OUT sets
+	bool codeChanged = true;
 
-    // IN and OUT sets
-    bool codeChanged = true;
+#ifdef DEBUG
+	fprintf(stderr, "\nInitial IN and OUT sets:\n");
+	printOutNInMaps(function, outSetMap, inSetMap);
+	int iteration = 0;
+#endif
 
-    #ifdef DEBUG
-    fprintf(stderr, "\nInitial IN and OUT sets:\n");
-    printOutNInMaps(function, outSetMap, inSetMap);
-    int iteration = 0;
-    #endif
+	while (codeChanged)
+	{
+		codeChanged = false;
 
-    while (codeChanged) {
-        codeChanged = false;    
+		for (auto basicBlock = LLVMGetFirstBasicBlock(function);
+			 basicBlock;
+			 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+		{
 
-        for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-             basicBlock;
-             basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
-            
-            // IN[B] = U OUT[P] for all P in pred(B)
-            inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, outSetMap);
+			// IN[B] = U OUT[P] for all P in pred(B)
+			inSetMap[basicBlock] = findUnionOfAllPredOuts(basicBlock, predMap, outSetMap);
 
-            // OUT[B] = (IN[B] - KILL[B]) U GEN[B]
-            unordered_set<LLVMValueRef> newOut = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
+			// OUT[B] = (IN[B] - KILL[B]) U GEN[B]
+			unordered_set<LLVMValueRef> newOut = findUnionOfInAndGen(basicBlock, inSetMap, killSetMap, genSetMap);
 
-            // Check if the OUT set has changed
-            if (outSetMap[basicBlock] != newOut) {
-                codeChanged = true;
-            }
+			// Check if the OUT set has changed
+			if (outSetMap[basicBlock] != newOut)
+			{
+				codeChanged = true;
+			}
 
-            outSetMap[basicBlock] = newOut;
-        }
+			outSetMap[basicBlock] = newOut;
+		}
 
-        #ifdef DEBUG
-        fprintf(stderr,"\nIteration %d:\n", iteration);
-        printOutNInMaps(function, outSetMap, inSetMap);
-        iteration += 1;
-        #endif
-    }
+#ifdef DEBUG
+		fprintf(stderr, "\nIteration %d:\n", iteration);
+		printOutNInMaps(function, outSetMap, inSetMap);
+		iteration += 1;
+#endif
+	}
 }
 
 /**
  * @brief Checks if all store instructions write the same constant value.
  *
  * This function takes a vector of store instructions and checks if all store instructions write
- * the same constant value into memory. It returns true if all store instructions write the same 
+ * the same constant value into memory. It returns true if all store instructions write the same
  * constant value, and false otherwise.
  *
  * @param allStoresForLoadPtr A vector of store instructions writing to the same memory location.
  * @return True if all store instructions write the same constant value, false otherwise.
  */
-static bool allStoreWriteSameConstant(vector<LLVMValueRef> allStoresForLoadPtr) {
-    // Print all the store instructions
-    #ifdef DEBUG
-    printf("\nAll store instructions:\n");
-    for (auto storeInstr : allStoresForLoadPtr) {
-        LLVMDumpValue(storeInstr);
-        printf("\n");
-    }
-    #endif
-    
-    // Get the constant value written by the first store instruction
-    LLVMValueRef firstStoreVal = LLVMGetOperand(allStoresForLoadPtr[0], 0);
+static bool
+allStoreWriteSameConstant(vector<LLVMValueRef> allStoresForLoadPtr)
+{
+// Print all the store instructions
+#ifdef DEBUG
+	printf("\nAll store instructions:\n");
+	for (auto storeInstr : allStoresForLoadPtr)
+	{
+		LLVMDumpValue(storeInstr);
+		printf("\n");
+	}
+#endif
 
-    if (!LLVMIsAConstantInt(firstStoreVal)) {
-        return false;
-    }
+	// Get the constant value written by the first store instruction
+	LLVMValueRef firstStoreVal = LLVMGetOperand(allStoresForLoadPtr[0], 0);
 
-    // Iterate over all the store instructions that write to loadPtr
-    for (auto storeInstr : allStoresForLoadPtr) {
-        // Return false if it is not a constant store instruction or does not write the same constant value
-        LLVMValueRef storeVal = LLVMGetOperand(storeInstr, 0);
-        if (!LLVMIsAConstantInt(storeVal) || LLVMGetOperand(storeInstr, 0) != firstStoreVal) {
-            return false;
-        }
-    }
+	if (!LLVMIsAConstantInt(firstStoreVal))
+	{
+		return false;
+	}
 
-    // All store instructions write the same constant value
-    return true;
+	// Iterate over all the store instructions that write to loadPtr
+	for (auto storeInstr : allStoresForLoadPtr)
+	{
+		// Return false if it is not a constant store instruction or does not write the same constant value
+		LLVMValueRef storeVal = LLVMGetOperand(storeInstr, 0);
+		if (!LLVMIsAConstantInt(storeVal) || LLVMGetOperand(storeInstr, 0) != firstStoreVal)
+		{
+			return false;
+		}
+	}
+
+	// All store instructions write the same constant value
+	return true;
 }
-
 
 /**
  * @brief Processes a store instruction, removing any instructions in R that will be killed by the current store instruction.
- * 
- * Given a store instruction, this function removes all the instructions in R (the in-set of the current basic block) 
- * that will be killed by the current instruction. 
+ *
+ * Given a store instruction, this function removes all the instructions in R (the in-set of the current basic block)
+ * that will be killed by the current instruction.
  * The store instruction is then added to R (in-set) for future processing.
- * 
+ *
  * @param instruction The LLVM store instruction to be processed.
  * @param storeInstructionsMap The map of store instructions affecting the same pointer.
  * @param R The in-set for the current basic block.
  */
-static void processStoreInstruction(LLVMValueRef instruction, 
-	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap, 
-	unordered_set<LLVMValueRef> &R) {
+static void
+processStoreInstruction(LLVMValueRef instruction,
+						unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
+						unordered_set<LLVMValueRef> &R)
+{
 
-    // Remove all the instruction in R that will be killed by the current instruction
-    LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
+	// Remove all the instruction in R that will be killed by the current instruction
+	LLVMValueRef storePtr = LLVMGetOperand(instruction, 1);
 
-    for (auto killedInstr : storeInstructionsMap[storePtr]) {
-        R.erase(killedInstr);
-		
-		#ifdef DEBUG
+	for (auto killedInstr : storeInstructionsMap[storePtr])
+	{
+		R.erase(killedInstr);
+
+#ifdef DEBUG
 		printf("Instruction(s) killed by the current store instruction\n");
 		LLVMDumpValue(killedInstr);
 		printf("\n");
-		#endif
-    }
+#endif
+	}
 
-    R.insert(instruction);
+	R.insert(instruction);
 }
-
-
 
 /**
  * @brief Processes a given load instruction, marking the instruction for deletion if possible.
  *
- * This function processes the given load instruction, and identifies all the store instructions in the IN set map 
+ * This function processes the given load instruction, and identifies all the store instructions in the IN set map
  * that write to the same memory address as the load instruction. If all these store instructions write the same
  * constant value into memory, the function replaces all uses of the load instruction with the constant value in the
  * store instruction and marks the load instruction for deletion.
@@ -775,45 +871,52 @@ static void processStoreInstruction(LLVMValueRef instruction,
  * @param storeInstructionsMap The map of store instructions affecting the same pointer.
  * @param R The in set of the basic block in which the instruction resides.
  * @param toDelete A vector containing LLVM instructions to be deleted from the basic block.
- */ 
+ */
 
-static void processLoadInstruction(LLVMValueRef instruction, 
-	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap, 
-	unordered_set<LLVMValueRef> R, vector<LLVMValueRef> &toDelete) {
-	#ifdef DEBUG
+static void
+processLoadInstruction(LLVMValueRef instruction,
+					   unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
+					   unordered_set<LLVMValueRef> R, vector<LLVMValueRef> &toDelete)
+{
+#ifdef DEBUG
 	printf("Load instruction: \n");
 	LLVMDumpValue(instruction);
 	printf("\n");
-	#endif
+#endif
 
 	LLVMValueRef loadPtr = LLVMGetOperand(instruction, 0);
 
-    // Find all the store instructions in R that write to loadPtr
-    vector<LLVMValueRef> allStoresForLoadPtr;
-    for (auto strInstr : storeInstructionsMap[loadPtr]) {
-        if (R.find(strInstr) != R.end()) {
-            allStoresForLoadPtr.push_back(strInstr);
-        }
-    }
+	// Find all the store instructions in R that write to loadPtr
+	vector<LLVMValueRef> allStoresForLoadPtr;
+	for (auto strInstr : storeInstructionsMap[loadPtr])
+	{
+		if (R.find(strInstr) != R.end())
+		{
+			allStoresForLoadPtr.push_back(strInstr);
+		}
+	}
 
-    // If all these store instructions are constant store instructions and write
-    // the same constant value into memory
-    if (allStoreWriteSameConstant(allStoresForLoadPtr)) {
-        // replaces all uses of the load instruction by the constant in the store instruction
-        LLVMReplaceAllUsesWith(instruction, LLVMGetOperand(allStoresForLoadPtr[0], 0));
-        toDelete.push_back(instruction);
+	// If all these store instructions are constant store instructions and write
+	// the same constant value into memory
+	if (allStoreWriteSameConstant(allStoresForLoadPtr))
+	{
+		// replaces all uses of the load instruction by the constant in the store instruction
+		LLVMReplaceAllUsesWith(instruction, LLVMGetOperand(allStoresForLoadPtr[0], 0));
+		toDelete.push_back(instruction);
 
-		#ifdef DEBUG
+#ifdef DEBUG
 		printf("\nReplaced instruction:\n");
 		LLVMDumpValue(instruction);
 		printf("\nwith instruction:\n");
 		LLVMDumpValue(LLVMGetOperand(allStoresForLoadPtr[0], 0));
 		printf("\n");
-		#endif
-    } else {
-		#ifdef DEBUG
+#endif
+	}
+	else
+	{
+#ifdef DEBUG
 		printf("Not all store instructions write the same constant value\n");
-		#endif
+#endif
 	}
 }
 
@@ -829,41 +932,48 @@ static void processLoadInstruction(LLVMValueRef instruction,
  * @param inSetMap The map of in sets for each basic block.
  * @param toDelete The vector that will store instructions marked for deletion.
  */
-void processBasicBlocks(LLVMValueRef function, 
-	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap, 
-	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap, 
-	vector<LLVMValueRef> &toDelete) {
-		
-    // Iterate over all the basic blocks in the function
-    for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-        basicBlock;
-        basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+static void
+processBasicBlocks(LLVMValueRef function,
+				   unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap,
+				   unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> inSetMap,
+				   vector<LLVMValueRef> &toDelete)
+{
 
-        unordered_set<LLVMValueRef> R = inSetMap[basicBlock];
+	// Iterate over all the basic blocks in the function
+	for (auto basicBlock = LLVMGetFirstBasicBlock(function);
+		 basicBlock;
+		 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+	{
 
-        // Iterate over all the instructions in the basic block
-        for (auto instruction = LLVMGetFirstInstruction(basicBlock);
-            instruction;
-            instruction = LLVMGetNextInstruction(instruction)) {
-			
-			#ifdef DEBUG
+		unordered_set<LLVMValueRef> R = inSetMap[basicBlock];
+
+		// Iterate over all the instructions in the basic block
+		for (auto instruction = LLVMGetFirstInstruction(basicBlock);
+			 instruction;
+			 instruction = LLVMGetNextInstruction(instruction))
+		{
+
+#ifdef DEBUG
 			printf("Current store instruction: \n");
 			LLVMDumpValue(instruction);
 			printf("\n");
-			#endif
+#endif
 
-			if (LLVMIsAStoreInst(instruction)) {
+			if (LLVMIsAStoreInst(instruction))
+			{
 				processStoreInstruction(instruction, storeInstructionsMap, R);
-			} else if (LLVMIsALoadInst(instruction)) {
+			}
+			else if (LLVMIsALoadInst(instruction))
+			{
 				processLoadInstruction(instruction, storeInstructionsMap, R, toDelete);
 			}
-        }
-    }
+		}
+	}
 }
 
 /**
  * @brief Performs constant propagation on the given function.
- * 
+ *
  * It replaces load instructions with constants if all the stores
  * that write to the memory location being read have the same constant value.
  *
@@ -871,15 +981,17 @@ void processBasicBlocks(LLVMValueRef function,
  *
  * @return True if any instruction was deleted, False otherwise
  */
-static bool constantPropagation(LLVMValueRef function) {
+static bool
+constantPropagation(LLVMValueRef function)
+{
 	// Build a map of store instructions
 	unordered_map<LLVMValueRef, vector<LLVMValueRef>> storeInstructionsMap = buildStoreInstructionsMap(function);
 
 	// Declare KILL and GEN Maps and populate them
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> killSetMap;
 	unordered_map<LLVMBasicBlockRef, unordered_set<LLVMValueRef>> genSetMap;
-	buildKillNGenSetMaps(function, storeInstructionsMap, killSetMap, genSetMap);	
-	
+	buildKillNGenSetMaps(function, storeInstructionsMap, killSetMap, genSetMap);
+
 	// Build a map of all the predecessors of each basic block
 	unordered_map<LLVMBasicBlockRef, vector<LLVMBasicBlockRef>> predMap = buildPredMap(function);
 
@@ -910,44 +1022,47 @@ static bool constantPropagation(LLVMValueRef function) {
  *
  * @param function The LLVM function to be optimized.
  */
-void optimizeFunction(LLVMValueRef function) {
-    bool codeChanged = true;
+void optimizeFunction(LLVMValueRef function)
+{
+	bool codeChanged = true;
 
-    while (codeChanged) {
-        // Reset codeChanged to false before applying optimizations
-        codeChanged = false;
+	while (codeChanged)
+	{
+		// Reset codeChanged to false before applying optimizations
+		codeChanged = false;
 
 		// perform global optimization
 		codeChanged = constantPropagation(function) || codeChanged;
-		#ifdef DEBUG
+#ifdef DEBUG
 		printf("\nConstant propagation: %d\n", codeChanged);
 		printf("______________________________________\n");
-		#endif
+#endif
 
-        for (auto basicBlock = LLVMGetFirstBasicBlock(function);
-             basicBlock;
-             basicBlock = LLVMGetNextBasicBlock(basicBlock)) {
+		for (auto basicBlock = LLVMGetFirstBasicBlock(function);
+			 basicBlock;
+			 basicBlock = LLVMGetNextBasicBlock(basicBlock))
+		{
 
-            // call local optimization functions
-            codeChanged = constantFolding(basicBlock) || codeChanged;
-            #ifdef DEBUG
-            printf("\nConstant folding: %d\n", codeChanged);
-            printf("______________________________________\n");
-            #endif
+			// call local optimization functions
+			codeChanged = constantFolding(basicBlock) || codeChanged;
+#ifdef DEBUG
+			printf("\nConstant folding: %d\n", codeChanged);
+			printf("______________________________________\n");
+#endif
 
-            codeChanged = commonSubexpressionElimination(basicBlock) || codeChanged;
-            #ifdef DEBUG
-            printf("\nCommon expression: %d\n", codeChanged);
-            printf("______________________________________\n");
-            #endif
+			codeChanged = commonSubexpressionElimination(basicBlock) || codeChanged;
+#ifdef DEBUG
+			printf("\nCommon expression: %d\n", codeChanged);
+			printf("______________________________________\n");
+#endif
 
-            codeChanged = deadCodeElimination(basicBlock) || codeChanged;
-            #ifdef DEBUG
-            printf("\nDead code: %d\n", codeChanged);
-            printf("______________________________________\n");
-            #endif
-        }
-    }
+			codeChanged = deadCodeElimination(basicBlock) || codeChanged;
+#ifdef DEBUG
+			printf("\nDead code: %d\n", codeChanged);
+			printf("______________________________________\n");
+#endif
+		}
+	}
 }
 
 /**
@@ -958,21 +1073,23 @@ void optimizeFunction(LLVMValueRef function) {
  *
  * @param module The LLVM module representing the program to be optimized.
  */
-void optimizeProgram(LLVMModuleRef module) {
-    // Iterate through all functions in the module
-    for (auto function = LLVMGetFirstFunction(module);
-         function;
-         function = LLVMGetNextFunction(function)) {
+void optimizeProgram(LLVMModuleRef module)
+{
+	// Iterate through all functions in the module
+	for (auto function = LLVMGetFirstFunction(module);
+		 function;
+		 function = LLVMGetNextFunction(function))
+	{
 
-        const char* funcName = LLVMGetValueName(function);
+		const char *funcName = LLVMGetValueName(function);
 
-        #ifdef DEBUG
-        printf("Function Name: %s\n", funcName);
-        #endif
+#ifdef DEBUG
+		printf("Function Name: %s\n", funcName);
+#endif
 
-        // Optimize the current function
-        optimizeFunction(function);
-    }
+		// Optimize the current function
+		optimizeFunction(function);
+	}
 }
 
 /**
@@ -986,35 +1103,36 @@ void optimizeProgram(LLVMModuleRef module) {
  * @param argv An array of strings containing the arguments passed to the program.
  * @return An integer value indicating the success or failure of the program execution.
  */
-int main(int argc, char **argv) {
-    LLVMModuleRef mod;
+int main(int argc, char **argv)
+{
+	// Check the number of arguments
+	if (argc != 2)
+	{
+		cout << "Usage: " << argv[0] << " <filename.ll>" << endl;
+		return 1;
+	}
 
-    // Check if the number of arguments is valid
-    if (argc == 2) {
-        // Create the LLVM model from the input file
-        mod = createLLVMModel(argv[1]);
-    } else {
-        mod = NULL;
-        printf("Usage: ./optimizer <sample.ll>\n");
-        return 1;
-    }
+	// Create LLVM module from IR file
+	LLVMModuleRef mod = createLLVMModel(argv[1]);
 
-    // Check if the model is not NULL
-    if (mod != NULL){
-        optimizeProgram(mod);
-    } else {
-        printf("Invalid IR: module is NULL\n");
+	// Check if module is valid
+	if (mod == NULL)
+	{
+		cout << "Error: Invalid LLVM IR file" << endl;
 		return 2;
-    }
+	}
+
+	// Optimize the program
+	optimizeProgram(mod);
 
 	// Create a string to store the output filename
-   	std::string outputFilename;
+	std::string outputFilename;
 
 	// Append `_opt` to the basename of the input file and save it in outputFilename
 	changeFileExtension(argv[1], outputFilename, "_opt.ll");
 
-    // Writes the LLVM IR to a file named "test.ll"
-    LLVMPrintModuleToFile(mod, outputFilename.c_str(), NULL);
+	// Writes the LLVM IR to a file named "test.ll"
+	LLVMPrintModuleToFile(mod, outputFilename.c_str(), NULL);
 
-    return 0;
+	return 0;
 }
