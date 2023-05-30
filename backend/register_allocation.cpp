@@ -274,13 +274,20 @@ isArithmetic(LLVMOpcode instrOpcode)
 static LLVMValueRef
 selectSpillInstr(LiveUsageMap &liveUsageMap,
                  AllocatedReg &bbAllocatedRegisterMap,
-                 LLVMValueRef currInstr)
+                 LLVMValueRef currInstr,
+                 int currInstrIdx)
 {
     LLVMValueRef spillVar = nullptr;
     int minFrequency = INT_MAX;
     for (auto it = bbAllocatedRegisterMap.begin(); it != bbAllocatedRegisterMap.end(); ++it)
     {
         LLVMValueRef instr = it->first;
+        // if the variable is not live, skip it
+        if (liveUsageMap[instr].back() < currInstrIdx)
+        {
+            continue;
+        }
+
         Register registerName = it->second;
         if (registerName != SPILL && liveUsageMap[instr].size() < minFrequency)
         {
@@ -371,7 +378,7 @@ allocateRegisterForBasicBlock(LLVMBasicBlockRef &basicBlock,
         }
 
         // If there is no available register, find the instr to spill
-        LLVMValueRef spillInstr = selectSpillInstr(liveUsageMap, bbAllocatedRegisterMap, currInstr);
+        LLVMValueRef spillInstr = selectSpillInstr(liveUsageMap, bbAllocatedRegisterMap, currInstr, i);
 
         // If no registers are available, select an instruction to spill
         if (liveUsageMap[spillInstr].size() > liveUsageMap[currInstr].size())

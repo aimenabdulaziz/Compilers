@@ -458,6 +458,14 @@ handleLLVMLoad(LLVMValueRef instruction, CodeGenContext &context)
         Register reg = context.allocatedRegMap[instruction];
         out << "\tmovl " << offset << "(%ebp), %" << getRegisterName(reg) << "\n";
     }
+    else if (variableIsInMemory(context, instruction))
+    {
+        LLVMValueRef loadValue = LLVMGetOperand(instruction, 0);
+        int offset1 = context.offsetMap[loadValue];
+        int offset2 = context.offsetMap[instruction];
+        out << "\tmovl " << offset1 << "(%ebp), %eax\n";
+        out << "\tmovl %eax, " << offset2 << "(%ebp)\n";
+    }
 #ifdef DEBUG
     else
     {
@@ -500,19 +508,13 @@ handleLLVMStore(LLVMValueRef instruction, CodeGenContext &context)
         int offset = context.offsetMap[storeLocation];
         out << "\tmovl %" << getRegisterName(reg) << ", " << offset << "(%ebp)\n";
     }
-    else if (variableIsInMemory(context, storedValue))
+    else
     {
         int offset1 = context.offsetMap[storedValue];
         int offset2 = context.offsetMap[storeLocation];
         out << "\tmovl " << offset1 << "(%ebp), %eax\n";
         out << "\tmovl %eax, " << offset2 << "(%ebp)\n";
     }
-#ifdef DEBUG
-    else
-    {
-        throwError(storedValue, "store");
-    }
-#endif
 }
 
 /**
@@ -674,12 +676,12 @@ handleBinaryAndComparisonInstructions(LLVMValueRef instruction, CodeGenContext &
         operationReg = EAX;
     }
 
-    // If the first operand is a constant, move it to eax
+    // If the first operand is a constant, move it to operationReg
     LLVMValueRef operand1 = LLVMGetOperand(instruction, 0);
     if (LLVMIsAConstant(operand1))
     {
         int value = LLVMConstIntGetSExtValue(operand1);
-        out << "\tmovl $" << value << ", %eax\n";
+        out << "\tmovl $" << value << ", %" << getRegisterName(operationReg) << "\n";
     }
     else if (variableIsInRegister(context, operand1))
     {
@@ -712,10 +714,17 @@ handleBinaryAndComparisonInstructions(LLVMValueRef instruction, CodeGenContext &
         int offset = context.offsetMap[operand2];
         out << "\t" << getAssemblyOpcodeForInstruction(instruction) << " " << offset << "(%ebp), %" << getRegisterName(operationReg) << "\n";
     }
+    // else if (variableIsInMemory(context, operand2))
+    // {
+    //     int offset = context.offsetMap[operand2];
+    //     out << "\tmovl " << offset << "(%ebp), %ebx\n"; // Load the spilled value into a different register, let's say EBX for this example
+    //     out << "\t" << getAssemblyOpcodeForInstruction(instruction) << " %ebx, %" << getRegisterName(operationReg) << "\n";
+    // }
 
-    if (variableIsInMemory(context, operand1))
+    // If the instruction ptr is in memory, move the result to the memory location
+    if (variableIsInMemory(context, instruction))
     {
-        int offset = context.offsetMap[operand1];
+        int offset = context.offsetMap[instruction];
         out << "\tmovl %" << getRegisterName(operationReg) << ", " << offset << "(%ebp)\n";
     }
 }
