@@ -35,24 +35,25 @@
 using namespace std;
 
 // Local function prototype
-static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType);
+static LLVMValueRef
+traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType);
 
 /* This array maps rop_type values to corresponding LLVMIntPredicate values.
  *
  * The order of values in this array corresponds to the order of values in
  * the rop_type enumeration defined in ast.h.
- * 
+ *
  * Example usage:
  * 		LLVMIntPredicate intPredicate = intPredicates[node->rexpr.op];
  * 		LLVMValueRef result = LLVMBuildICmp(builder, intPredicate, lhs, rhs, "");
  */
 LLVMIntPredicate intPredicates[] = {
-    LLVMIntSLT, // lt
-    LLVMIntSGT, // gt
-    LLVMIntSLE, // le
-    LLVMIntSGE, // ge
-    LLVMIntEQ,  // eq
-    LLVMIntNE,  // neq
+	LLVMIntSLT, // lt
+	LLVMIntSGT, // gt
+	LLVMIntSLE, // le
+	LLVMIntSGE, // ge
+	LLVMIntEQ,	// eq
+	LLVMIntNE,	// neq
 };
 
 /*
@@ -66,16 +67,16 @@ LLVMIntPredicate intPredicates[] = {
  *     LLVMValueRef result = LLVMBuildBinOp(builder, opcode, lhs, rhs, "");
  */
 LLVMOpcode opcodes[] = {
-    LLVMAdd,     // add
-    LLVMSub,     // sub
-    LLVMUDiv,    // divide
-    LLVMMul,     // mul
-    LLVMFNeg,    // uminus
+	LLVMAdd,  // add
+	LLVMSub,  // sub
+	LLVMUDiv, // divide
+	LLVMMul,  // mul
+	LLVMFNeg, // uminus
 };
 
 /**
  * @brief Emits LLVM IR code for the given block and branch to the exit block.
- * 
+ *
  * @param module       Reference to the LLVM module
  * @param builder      Reference to the LLVM IR builder
  * @param func         Reference to the LLVM function
@@ -85,23 +86,26 @@ LLVMOpcode opcodes[] = {
  * @param currBlock    Reference to the current basic block
  * @param exitBlock    Reference to the exit basic block
  */
-void emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType, astNode *body, LLVMBasicBlockRef &currBlock, LLVMBasicBlockRef &exitBlock) {
-	if (!body || !currBlock) {
-       return;
+static void
+emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType, astNode *body, LLVMBasicBlockRef &currBlock, LLVMBasicBlockRef &exitBlock)
+{
+	if (!body || !currBlock)
+	{
+		return;
 	}
 	// Position the builder at the end of the current block
 	LLVMPositionBuilderAtEnd(builder, currBlock);
-	
+
 	// Generate LLVM IR code for the body
 	traverseASTAndGenerateIR(body, module, builder, func, varMap, intType);
-	
+
 	// Unconditionally branch to the exit block
 	LLVMBuildBr(builder, exitBlock);
 }
 
 /**
  * @brief Traverse the AST and generate LLVM IR code for the input statement.
- * 
+ *
  * @param stmt The input statement (AST) to be processed.
  * @param module The LLVM module being constructed.
  * @param builder The LLVM IR builder.
@@ -110,200 +114,223 @@ void emitBlock(LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &fun
  * @param intType The LLVM type of an integer.
  * @return The LLVMValueRef of the resulting LLVM IR or nullptr if the node does not generate a value.
  */
-static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType) {
+static LLVMValueRef
+traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType)
+{
 	LLVMValueRef result = nullptr;
-	switch(stmt->type) {
-		case ast_call: {
-			if (!strcmp(stmt->call.name, "print")) {
-				// Get the 'print' function from the module
-				LLVMValueRef printFunc = LLVMGetNamedFunction(module, "print");
+	switch (stmt->type)
+	{
+	case ast_call:
+	{
+		if (!strcmp(stmt->call.name, "print"))
+		{
+			// Get the 'print' function from the module
+			LLVMValueRef printFunc = LLVMGetNamedFunction(module, "print");
 
-				// Generate the IR code for the print function argument
-				LLVMValueRef arg = traverseASTAndGenerateIR(stmt->call.param, module, builder, func, varMap, intType);
-				LLVMValueRef args[] = { arg };
+			// Generate the IR code for the print function argument
+			LLVMValueRef arg = traverseASTAndGenerateIR(stmt->call.param, module, builder, func, varMap, intType);
+			LLVMValueRef args[] = {arg};
 
-				// Function type of the 'print' function
-				LLVMTypeRef printParamTypes[] = { intType }; // One integer parameter 
-				LLVMTypeRef printFuncType = LLVMFunctionType(LLVMVoidType(), printParamTypes, 1, 0);
+			// Function type of the 'print' function
+			LLVMTypeRef printParamTypes[] = {intType}; // One integer parameter
+			LLVMTypeRef printFuncType = LLVMFunctionType(LLVMVoidType(), printParamTypes, 1, 0);
 
-				// Build the call instruction for the 'print' function
-				LLVMBuildCall2(builder, printFuncType, printFunc, args, 1, "");
-			} else if (!strcmp(stmt->call.name, "read")) {
-				// Get the 'read' function from the module
-				LLVMValueRef readFunc = LLVMGetNamedFunction(module, "read");
-
-				// Function type of the 'read' function
-				LLVMTypeRef readFuncType = LLVMFunctionType(intType, nullptr, 0, 0);
-				
-				// Build the call instruction for the 'read' function
-				result = LLVMBuildCall2(builder, readFuncType, readFunc, nullptr, 0, "");
-			} 
-			break;
+			// Build the call instruction for the 'print' function
+			LLVMBuildCall2(builder, printFuncType, printFunc, args, 1, "");
 		}
-        case ast_ret: {
-            // Handle 'return' statement
-            LLVMValueRef returnValue = traverseASTAndGenerateIR(stmt->ret.expr, module, builder, func, varMap, intType);
-            LLVMBuildRet(builder, returnValue);
-            break;
-        }
-        case ast_block: {
-            // Handle 'block' statement
-			// create a new symbol table currSymTable and push it to symbol table stack
-			unordered_map<string, LLVMValueRef> currSymTable;
-			varMap.push_back(currSymTable);
+		else if (!strcmp(stmt->call.name, "read"))
+		{
+			// Get the 'read' function from the module
+			LLVMValueRef readFunc = LLVMGetNamedFunction(module, "read");
 
-            for (auto &node : *stmt->block.stmt_list) {
-                traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
-            }
-			
-			// pop the symbol table from the stack
-			varMap.pop_back();
-            break;
-        }
-		case ast_while: {
-			// Create a new basic block to start insertion into (headerBlock).
-			LLVMBasicBlockRef headerBlock = LLVMAppendBasicBlock(func, "");
+			// Function type of the 'read' function
+			LLVMTypeRef readFuncType = LLVMFunctionType(intType, nullptr, 0, 0);
 
-			// Create an unconditional branch instruction to jump to the new bb
-			LLVMBuildBr(builder, headerBlock);
-
-			// Create basic blocks for the while body
-			LLVMBasicBlockRef bodyBlock = LLVMAppendBasicBlock(func, "");
-
-			// Emit code for the body block
-			emitBlock(module, builder, func, varMap, intType, stmt->whilen.body, bodyBlock, headerBlock);
-
-			// Create basic blocks for the while exit
-			LLVMBasicBlockRef exitBlock = LLVMAppendBasicBlock(func, "");
-
-			// Position the builder at the end of the headerBlock
-			LLVMPositionBuilderAtEnd(builder, headerBlock);
-
-			// Get the result of the condition comparison
-			LLVMValueRef cmp = traverseASTAndGenerateIR(stmt->whilen.cond, module, builder, func, varMap, intType);
-
-			// Create a conditional branch based on the comparison result in the headerBlock
-			LLVMBuildCondBr(builder, cmp, bodyBlock, exitBlock);
-
-			// Emit code for the exit block
-			LLVMPositionBuilderAtEnd(builder, exitBlock);
-			
-			break;
+			// Build the call instruction for the 'read' function
+			result = LLVMBuildCall2(builder, readFuncType, readFunc, nullptr, 0, "");
 		}
-		case ast_if: {
-			// Create an if stmt basic block 
-			LLVMBasicBlockRef ifBlock = LLVMAppendBasicBlock(func, "");
+		break;
+	}
+	case ast_ret:
+	{
+		// Handle 'return' statement
+		LLVMValueRef returnValue = traverseASTAndGenerateIR(stmt->ret.expr, module, builder, func, varMap, intType);
+		LLVMBuildRet(builder, returnValue);
+		break;
+	}
+	case ast_block:
+	{
+		// Handle 'block' statement
+		// create a new symbol table currSymTable and push it to symbol table stack
+		unordered_map<string, LLVMValueRef> currSymTable;
+		varMap.push_back(currSymTable);
 
-			// Get the current basic block where the if statement is being inserted into
-			LLVMBasicBlockRef insertionBlock = LLVMGetInsertBlock(builder);
+		for (auto &node : *stmt->block.stmt_list)
+		{
+			traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
+		}
 
-			// Position the builder at the end of the ifBlock
-			LLVMPositionBuilderAtEnd(builder, ifBlock);
+		// pop the symbol table from the stack
+		varMap.pop_back();
+		break;
+	}
+	case ast_while:
+	{
+		// Create a new basic block to start insertion into (headerBlock).
+		LLVMBasicBlockRef headerBlock = LLVMAppendBasicBlock(func, "");
 
-			// Generate LLVM IR code for the if_body
-			traverseASTAndGenerateIR(stmt->ifn.if_body, module, builder, func, varMap, intType);
+		// Create an unconditional branch instruction to jump to the new bb
+		LLVMBuildBr(builder, headerBlock);
 
-			// Get the last basic block created within the nested constructs of the ifBlock
-			LLVMBasicBlockRef lastIfBlock = LLVMGetLastBasicBlock(func);
-			
-			// Create a basic block for the else block
-			LLVMBasicBlockRef elseBlock = nullptr;
-			LLVMBasicBlockRef lastElseBlock = nullptr;
+		// Create basic blocks for the while body
+		LLVMBasicBlockRef bodyBlock = LLVMAppendBasicBlock(func, "");
 
-			// Emit code for the else block
-			if (stmt->ifn.else_body) {
-				elseBlock = LLVMAppendBasicBlock(func, "");
-				LLVMPositionBuilderAtEnd(builder, elseBlock);
+		// Emit code for the body block
+		emitBlock(module, builder, func, varMap, intType, stmt->whilen.body, bodyBlock, headerBlock);
 
-				// Generate LLVM IR code for the else_body
-				traverseASTAndGenerateIR(stmt->ifn.else_body, module, builder, func, varMap, intType);
+		// Create basic blocks for the while exit
+		LLVMBasicBlockRef exitBlock = LLVMAppendBasicBlock(func, "");
 
-				// Get the last basic block created within the nested constructs of the elseBlock
-				lastElseBlock = LLVMGetLastBasicBlock(func);
-			}
+		// Position the builder at the end of the headerBlock
+		LLVMPositionBuilderAtEnd(builder, headerBlock);
 
-			// Position the builder at the end of the block where the condition was evaluated
-			LLVMPositionBuilderAtEnd(builder, insertionBlock);
+		// Get the result of the condition comparison
+		LLVMValueRef cmp = traverseASTAndGenerateIR(stmt->whilen.cond, module, builder, func, varMap, intType);
 
-			// Create a basic block for the exit block
-			LLVMBasicBlockRef exitBlock = nullptr;
+		// Create a conditional branch based on the comparison result in the headerBlock
+		LLVMBuildCondBr(builder, cmp, bodyBlock, exitBlock);
 
-			// Get the result of the condition comparison
-			LLVMValueRef cmp = traverseASTAndGenerateIR(stmt->ifn.cond, module, builder, func, varMap, intType);
-		
-			// Create a conditional branch based on the comparison result
-			if (stmt->ifn.else_body) {
-				LLVMBuildCondBr(builder, cmp, ifBlock, elseBlock);
-				exitBlock = LLVMAppendBasicBlock(func, "");
-			} else {
-				// If there's no else body, branch to exitBlock directly
-				exitBlock = LLVMAppendBasicBlock(func, "");
-				LLVMBuildCondBr(builder, cmp, ifBlock, exitBlock);
-			}
+		// Emit code for the exit block
+		LLVMPositionBuilderAtEnd(builder, exitBlock);
 
-			// Position the builder at the end of the last basic block of the if_block
-			LLVMPositionBuilderAtEnd(builder, lastIfBlock);
+		break;
+	}
+	case ast_if:
+	{
+		// Create an if stmt basic block
+		LLVMBasicBlockRef ifBlock = LLVMAppendBasicBlock(func, "");
+
+		// Get the current basic block where the if statement is being inserted into
+		LLVMBasicBlockRef insertionBlock = LLVMGetInsertBlock(builder);
+
+		// Position the builder at the end of the ifBlock
+		LLVMPositionBuilderAtEnd(builder, ifBlock);
+
+		// Generate LLVM IR code for the if_body
+		traverseASTAndGenerateIR(stmt->ifn.if_body, module, builder, func, varMap, intType);
+
+		// Get the last basic block created within the nested constructs of the ifBlock
+		LLVMBasicBlockRef lastIfBlock = LLVMGetLastBasicBlock(func);
+
+		// Create a basic block for the else block
+		LLVMBasicBlockRef elseBlock = nullptr;
+		LLVMBasicBlockRef lastElseBlock = nullptr;
+
+		// Emit code for the else block
+		if (stmt->ifn.else_body)
+		{
+			elseBlock = LLVMAppendBasicBlock(func, "");
+			LLVMPositionBuilderAtEnd(builder, elseBlock);
+
+			// Generate LLVM IR code for the else_body
+			traverseASTAndGenerateIR(stmt->ifn.else_body, module, builder, func, varMap, intType);
+
+			// Get the last basic block created within the nested constructs of the elseBlock
+			lastElseBlock = LLVMGetLastBasicBlock(func);
+		}
+
+		// Position the builder at the end of the block where the condition was evaluated
+		LLVMPositionBuilderAtEnd(builder, insertionBlock);
+
+		// Create a basic block for the exit block
+		LLVMBasicBlockRef exitBlock = nullptr;
+
+		// Get the result of the condition comparison
+		LLVMValueRef cmp = traverseASTAndGenerateIR(stmt->ifn.cond, module, builder, func, varMap, intType);
+
+		// Create a conditional branch based on the comparison result
+		if (stmt->ifn.else_body)
+		{
+			LLVMBuildCondBr(builder, cmp, ifBlock, elseBlock);
+			exitBlock = LLVMAppendBasicBlock(func, "");
+		}
+		else
+		{
+			// If there's no else body, branch to exitBlock directly
+			exitBlock = LLVMAppendBasicBlock(func, "");
+			LLVMBuildCondBr(builder, cmp, ifBlock, exitBlock);
+		}
+
+		// Position the builder at the end of the last basic block of the if_block
+		LLVMPositionBuilderAtEnd(builder, lastIfBlock);
+
+		// Unconditionally branch to the exit block
+		LLVMBuildBr(builder, exitBlock);
+
+		// Unconditionally branch to the exit block if there's an else body
+		if (stmt->ifn.else_body)
+		{
+			// Position the builder at the end of the last basic block of the else_block
+			LLVMPositionBuilderAtEnd(builder, lastElseBlock);
 
 			// Unconditionally branch to the exit block
 			LLVMBuildBr(builder, exitBlock);
+		}
 
-			// Unconditionally branch to the exit block if there's an else body
-			if (stmt->ifn.else_body) {
-				// Position the builder at the end of the last basic block of the else_block
-				LLVMPositionBuilderAtEnd(builder, lastElseBlock);
+		// Emit code for the exit block
+		LLVMPositionBuilderAtEnd(builder, exitBlock);
 
-				// Unconditionally branch to the exit block
-				LLVMBuildBr(builder, exitBlock);
+		break;
+	}
+	case ast_asgn:
+	{
+		// Generate LLVM IR code for the assignment statement
+		LLVMValueRef rhsValue = traverseASTAndGenerateIR(stmt->asgn.rhs, module, builder, func, varMap, intType);
+
+		// Search the pointer to the variable from the symbol table starting from the top of the stack
+		LLVMValueRef varPtr;
+		for (int i = varMap.size() - 1; i >= 0; i--)
+		{
+			if (varMap[i].find(stmt->asgn.lhs->var.name) != varMap[i].end())
+			{
+				varPtr = varMap[i][stmt->asgn.lhs->var.name];
+				break;
 			}
-
-			// Emit code for the exit block
-			LLVMPositionBuilderAtEnd(builder, exitBlock);
-
-			break;
 		}
-		case ast_asgn: {
-			// Generate LLVM IR code for the assignment statement
-			LLVMValueRef rhsValue = traverseASTAndGenerateIR(stmt->asgn.rhs, module, builder, func, varMap, intType);
-			
-			// Search the pointer to the variable from the symbol table starting from the top of the stack
-			LLVMValueRef varPtr;
-			for (int i = varMap.size() - 1; i >= 0; i--) {
-				if (varMap[i].find(stmt->asgn.lhs->var.name) != varMap[i].end()) {
-					varPtr = varMap[i][stmt->asgn.lhs->var.name];
-					break;
-				}
-			}
-	
-			LLVMBuildStore(builder, rhsValue, varPtr);
-			break;
-		}
-		case ast_decl: {
-			// Generate LLVM IR code for the declaration statement
-			// Check if the variable has already been declared in the same scope
-			if (varMap.back().find(stmt->decl.name) != varMap.back().end()) {
-				printf("Error: Variable '%s' already declared in the same scope\n", stmt->decl.name);
-				exit(1);
-			}
 
-			// Create an alloca instruction and set the alignment to 4 bytes
-			LLVMValueRef var = LLVMBuildAlloca(builder, intType, stmt->decl.name);
-			LLVMSetAlignment(var, 4);
+		LLVMBuildStore(builder, rhsValue, varPtr);
+		break;
+	}
+	case ast_decl:
+	{
+		// Generate LLVM IR code for the declaration statement
+		// Check if the variable has already been declared in the same scope
+		if (varMap.back().find(stmt->decl.name) != varMap.back().end())
+		{
+			printf("Error: Variable '%s' already declared in the same scope\n", stmt->decl.name);
+			exit(1);
+		}
 
-			// Add the variable to the symbol table at the top of the stack
-			varMap.back()[stmt->decl.name] = var;
-			break;
-		}
-		default: {
-			printf("Error: Unknown statement type %d\n", stmt->type);
-			break;
-		}
+		// Create an alloca instruction and set the alignment to 4 bytes
+		LLVMValueRef var = LLVMBuildAlloca(builder, intType, stmt->decl.name);
+		LLVMSetAlignment(var, 4);
+
+		// Add the variable to the symbol table at the top of the stack
+		varMap.back()[stmt->decl.name] = var;
+		break;
+	}
+	default:
+	{
+		printf("Error: Unknown statement type %d\n", stmt->type);
+		break;
+	}
 	}
 	return result;
 }
 
 /**
  * Traverses the Abstract Syntax Tree (AST) and generates LLVM IR code for each node.
- * 
+ *
  * @param node      The current AST node being processed.
  * @param module    Reference to the LLVM module.
  * @param builder   Reference to the LLVM IR builder.
@@ -312,173 +339,196 @@ static LLVMValueRef traverseStmtAndGenerateIR(astStmt *stmt, LLVMModuleRef &modu
  * @param intType   The LLVM integer type used in the generated code.
  * @return          Returns the LLVM value for the given AST node or nullptr if the node does not generate a value.
  */
-static LLVMValueRef traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType) {
-    LLVMValueRef result = nullptr;
-	switch(node->type) {
-        case ast_prog: {
-            // Traverse the AST nodes for external declarations and functions
-            traverseASTAndGenerateIR(node->prog.ext1, module, builder, func, varMap, intType);
-            traverseASTAndGenerateIR(node->prog.ext2, module, builder, func, varMap, intType);
-            traverseASTAndGenerateIR(node->prog.func, module, builder, func, varMap, intType);
-            break;
-        }
-        case ast_extern: {
-            // Handle external declarations (print and read) for the program
-            LLVMTypeRef externFuncType;
+static LLVMValueRef
+traverseASTAndGenerateIR(astNode *node, LLVMModuleRef &module, LLVMBuilderRef &builder, LLVMValueRef &func, vector<unordered_map<string, LLVMValueRef>> &varMap, LLVMTypeRef intType)
+{
+	LLVMValueRef result = nullptr;
+	switch (node->type)
+	{
+	case ast_prog:
+	{
+		// Traverse the AST nodes for external declarations and functions
+		traverseASTAndGenerateIR(node->prog.ext1, module, builder, func, varMap, intType);
+		traverseASTAndGenerateIR(node->prog.ext2, module, builder, func, varMap, intType);
+		traverseASTAndGenerateIR(node->prog.func, module, builder, func, varMap, intType);
+		break;
+	}
+	case ast_extern:
+	{
+		// Handle external declarations (print and read) for the program
+		LLVMTypeRef externFuncType;
 
-            if (!strcmp(node->ext.name, "print")) {
-                LLVMTypeRef printParamTypes[] = { intType }; // One integer parameter 
-                externFuncType = LLVMFunctionType(LLVMVoidType(), printParamTypes, 1, 0); // Return type is void
-            } else if (!strcmp(node->ext.name, "read")) {
-                externFuncType = LLVMFunctionType(intType, nullptr, 0, 0); // No parameters
-            } 
+		if (!strcmp(node->ext.name, "print"))
+		{
+			LLVMTypeRef printParamTypes[] = {intType};								  // One integer parameter
+			externFuncType = LLVMFunctionType(LLVMVoidType(), printParamTypes, 1, 0); // Return type is void
+		}
+		else if (!strcmp(node->ext.name, "read"))
+		{
+			externFuncType = LLVMFunctionType(intType, nullptr, 0, 0); // No parameters
+		}
 
-            // Add the function to the module
-            func = LLVMAddFunction(module, node->ext.name, externFuncType);
-            break;
-        }
-		case ast_func: {
-			// Create a non-variadic function type that returns an integer and takes one parameter of integer type
-			LLVMTypeRef returnType = intType;
-			LLVMTypeRef paramTypes[] = { intType };
-			LLVMTypeRef funcType = LLVMFunctionType(returnType, paramTypes, 1, 0);
+		// Add the function to the module
+		func = LLVMAddFunction(module, node->ext.name, externFuncType);
+		break;
+	}
+	case ast_func:
+	{
+		// Create a non-variadic function type that returns an integer and takes one parameter of integer type
+		LLVMTypeRef returnType = intType;
+		LLVMTypeRef paramTypes[] = {intType};
+		LLVMTypeRef funcType = LLVMFunctionType(returnType, paramTypes, 1, 0);
 
-			// Add the function to the module
-    		func = LLVMAddFunction(module, node->func.name, funcType);
+		// Add the function to the module
+		func = LLVMAddFunction(module, node->func.name, funcType);
 
-			// Create a new basic block to start insertion into.
-			LLVMBasicBlockRef entryBlock = LLVMAppendBasicBlock(func, "");
+		// Create a new basic block to start insertion into.
+		LLVMBasicBlockRef entryBlock = LLVMAppendBasicBlock(func, "");
 
-			// Create a builder to generate instructions with.
-			LLVMPositionBuilderAtEnd(builder, entryBlock);
+		// Create a builder to generate instructions with.
+		LLVMPositionBuilderAtEnd(builder, entryBlock);
 
-			// create a new symbol table currSymTable and push it to symbol table stack
-			unordered_map<string, LLVMValueRef> currSymTable;
-			varMap.push_back(currSymTable);
+		// create a new symbol table currSymTable and push it to symbol table stack
+		unordered_map<string, LLVMValueRef> currSymTable;
+		varMap.push_back(currSymTable);
 
-			if (node->func.param) {
-				// Create a variable for the func parameter and store it in the entry block
-				LLVMValueRef var = LLVMBuildAlloca(builder, intType, node->func.param->var.name);
-				LLVMSetAlignment(var, 4);
-				LLVMBuildStore(builder, LLVMGetParam(func, 0), var);
+		if (node->func.param)
+		{
+			// Create a variable for the func parameter and store it in the entry block
+			LLVMValueRef var = LLVMBuildAlloca(builder, intType, node->func.param->var.name);
+			LLVMSetAlignment(var, 4);
+			LLVMBuildStore(builder, LLVMGetParam(func, 0), var);
 
-				// Add the variable to the variable map in the top symbol table
-				varMap.back()[node->func.param->var.name] = var;
+			// Add the variable to the variable map in the top symbol table
+			varMap.back()[node->func.param->var.name] = var;
+		}
+
+		// Traverse the function body
+		traverseASTAndGenerateIR(node->func.body, module, builder, func, varMap, intType);
+
+		// Pop the top of the variable map (MiniC only has one function)
+		varMap.pop_back();
+
+		break;
+	}
+	case ast_stmt:
+	{
+		// Handle statement
+		result = traverseStmtAndGenerateIR(&node->stmt, module, builder, func, varMap, intType);
+		break;
+	}
+	case ast_var:
+	{
+		// Load the value of a variable - start check from the top of the symbol table stack
+		for (int i = varMap.size() - 1; i >= 0; i--)
+		{
+			if (varMap[i].find(node->var.name) != varMap[i].end())
+			{
+				result = LLVMBuildLoad2(builder, intType, varMap[i][node->var.name], "");
+				break;
 			}
+		}
+		break;
+	}
+	case ast_cnst:
+	{
+		// Handle constant integer value
+		result = LLVMConstInt(intType, node->cnst.value, 0);
+		break;
+	}
+	case ast_rexpr:
+	{
+		// Handle relational expression
+		LLVMValueRef lhs = traverseASTAndGenerateIR(node->rexpr.lhs, module, builder, func, varMap, intType);
+		LLVMValueRef rhs = traverseASTAndGenerateIR(node->rexpr.rhs, module, builder, func, varMap, intType);
 
-			// Traverse the function body
-			traverseASTAndGenerateIR(node->func.body, module, builder, func, varMap, intType);
-			
-			// Pop the top of the variable map (MiniC only has one function)
-			varMap.pop_back();
-			
-			break;
-		}
-		case ast_stmt: {
-			// Handle statement
-			result = traverseStmtAndGenerateIR(&node->stmt, module, builder, func, varMap, intType);
-			break;
-		}
-		case ast_var: {
-			// Load the value of a variable - start check from the top of the symbol table stack
-			for (int i = varMap.size() - 1; i >= 0; i--) {
-				if (varMap[i].find(node->var.name) != varMap[i].end()) {
-					result = LLVMBuildLoad2(builder, intType, varMap[i][node->var.name], "");
-					break;
-				}
-			}
-			break;
-		}
-		case ast_cnst: {
-			// Handle constant integer value
-			result = LLVMConstInt(intType, node->cnst.value, 0);
-			break;
-		}
-		case ast_rexpr: {
-			// Handle relational expression
-			LLVMValueRef lhs = traverseASTAndGenerateIR(node->rexpr.lhs, module, builder, func, varMap, intType);
-			LLVMValueRef rhs = traverseASTAndGenerateIR(node->rexpr.rhs, module, builder, func, varMap, intType);
+		// Compare the two values and return the result
+		LLVMIntPredicate intPredicate = intPredicates[node->rexpr.op];
+		result = LLVMBuildICmp(builder, intPredicate, lhs, rhs, "");
+		break;
+	}
+	case ast_bexpr:
+	{
+		// Handle binary expression
+		LLVMValueRef lhs = traverseASTAndGenerateIR(node->bexpr.lhs, module, builder, func, varMap, intType);
+		LLVMValueRef rhs = traverseASTAndGenerateIR(node->bexpr.rhs, module, builder, func, varMap, intType);
 
-			// Compare the two values and return the result
-			LLVMIntPredicate intPredicate = intPredicates[node->rexpr.op];  
-			result = LLVMBuildICmp(builder, intPredicate, lhs, rhs, "");
-			break;
-		}
-		case ast_bexpr: {
-			// Handle binary expression
-			LLVMValueRef lhs = traverseASTAndGenerateIR(node->bexpr.lhs, module, builder, func, varMap, intType);
-			LLVMValueRef rhs = traverseASTAndGenerateIR(node->bexpr.rhs, module, builder, func, varMap, intType);
+		// Perform the binary operation and return the result
+		LLVMOpcode opcode = opcodes[node->bexpr.op];
+		result = LLVMBuildBinOp(builder, opcode, lhs, rhs, "");
+		break;
+	}
+	case ast_uexpr:
+	{
+		// Handle unary expression
+		LLVMValueRef expr = traverseASTAndGenerateIR(node->uexpr.expr, module, builder, func, varMap, intType);
 
-			// Perform the binary operation and return the result
-			LLVMOpcode opcode = opcodes[node->bexpr.op];
-			result = LLVMBuildBinOp(builder, opcode, lhs, rhs, "");
-			break;
-		}
-		case ast_uexpr: {
-			// Handle unary expression
-			LLVMValueRef expr = traverseASTAndGenerateIR(node->uexpr.expr, module, builder, func, varMap, intType);
-
-			// Perform the unary operation and return the result
-			result = LLVMBuildNeg(builder, expr, "");
-			break;
-		}
-		default: {
-			printf("Error: Unknown node type %d\n", node->type);
-			break;
-		}
+		// Perform the unary operation and return the result
+		result = LLVMBuildNeg(builder, expr, "");
+		break;
+	}
+	default:
+	{
+		printf("Error: Unknown node type %d\n", node->type);
+		break;
+	}
 	}
 	return result;
 }
 
 /**
  * Generates LLVM IR code from the given AST and saves it to a file with a '_manual.ll' extension.
- * 
+ *
  * @param node      The Abstract Syntax Tree (AST) node to generate LLVM IR code from.
  * @param filename  The input filename, used as the basis for the output file's name.
  * @return          Returns a pointer to the generated LLVM module, or nullptr if there was an error.
  */
-LLVMModuleRef generateIRAndSaveToFile(astNode *node, const char *filename) {
-    if (!node) {
-        printf("Error: AST is empty\n");
-        return nullptr;
-    }
+LLVMModuleRef
+generateIRAndSaveToFile(astNode *node, const char *filename)
+{
+	if (!node)
+	{
+		printf("Error: AST is empty\n");
+		return nullptr;
+	}
 
-    // Create LLVM module, builder, int primitive type, and function
-    LLVMModuleRef module = LLVMModuleCreateWithName(filename);
-    LLVMSetTarget(module, "x86_64-pc-linux-gnu");
-    LLVMBuilderRef builder = LLVMCreateBuilder();
-    LLVMTypeRef intType = LLVMInt32Type();
+	// Create LLVM module, builder, int primitive type, and function
+	LLVMModuleRef module = LLVMModuleCreateWithName(filename);
+	LLVMSetTarget(module, "x86_64-pc-linux-gnu");
+	LLVMBuilderRef builder = LLVMCreateBuilder();
+	LLVMTypeRef intType = LLVMInt32Type();
 	LLVMValueRef func;
 
-    // Initialize a vector of map to store the value references of variables
-    std::vector<unordered_map<string, LLVMValueRef>> varMap;
+	// Initialize a vector of map to store the value references of variables
+	std::vector<unordered_map<string, LLVMValueRef>> varMap;
 
 	// Traverse the AST to generate LLVM IR code
-    traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
+	traverseASTAndGenerateIR(node, module, builder, func, varMap, intType);
 
-    // Verify the generated module
-    if (LLVMVerifyModule(module, LLVMAbortProcessAction, nullptr)) {
-        printf("Error: The module is not valid\n");
-        return nullptr;
-    }
+	// Verify the generated module
+	if (LLVMVerifyModule(module, LLVMAbortProcessAction, nullptr))
+	{
+		printf("Error: The module is not valid\n");
+		return nullptr;
+	}
 
-    // Create a string to store the output filename
-   	std::string outputFilename;
+	// Create a string to store the output filename
+	std::string outputFilename;
 
-    // Call the changeFileExtension function and save the result in outputFilename
-    changeFileExtension(filename, outputFilename, "_manual.ll");
+	// Call the changeFileExtension function and save the result in outputFilename
+	changeFileExtension(filename, outputFilename, "_manual.ll");
 
-    // Write the generated LLVM IR code to a file called outputFilename
-    LLVMPrintModuleToFile(module, outputFilename.c_str(), nullptr);
+	// Write the generated LLVM IR code to a file called outputFilename
+	LLVMPrintModuleToFile(module, outputFilename.c_str(), nullptr);
 
-	#ifdef DEBUG
+#ifdef DEBUG
 	// Print the generated LLVM IR code to the console
 	LLVMDumpModule(module);
-	#endif
-	
-    // Cleanup
-    LLVMDisposeBuilder(builder);
-    LLVMDisposeModule(module);
+#endif
 
-    return module;
+	// Cleanup
+	LLVMDisposeBuilder(builder);
+	LLVMDisposeModule(module);
+
+	return module;
 }
